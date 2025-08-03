@@ -108,19 +108,7 @@ This context structure provides several advantages:
 
 ### Extending the Context
 
-- **Command Output**: Capture output from shell commands like `:r! git diff` or `:r! ls -la` by modifying the plugin to accept command output as part of the context.
-
-  ```vim
-  " Example function to extend context with command output
-  function! llm#with_command_output(command, prompt) abort
-    let l:output = system(a:command)
-    let l:extended_prompt = "Command output:\n" . l:output . "\n\nUser prompt: " . a:prompt
-    call llm#run(l:extended_prompt)
-  endfunction
-
-  " Example usage:
-  " :call llm#with_command_output('git diff origin/master', 'Explain these changes')
-  ```
+- **Command Output**: Pull in custom contexts by creating new buffers with explicit command outputs (e.g., `:new | r! git diff` or `:vsp | r! ls -la`), making it clear to the LLM what specific information you want it to consider.
 
 - **Project Structure**: Include information about the project structure by passing the output of `find` or similar commands.
 
