@@ -30,6 +30,13 @@ responses in a dedicated buffer, and customize model selection.
 :ListLLMModels                         *:ListLLMModels*
     List all available LLM models.
 
+:SetLLMAdapter {adapter}               *:SetLLMAdapter*
+    Set the default LLM adapter to use. Supports custom completion with
+    Ctrl‑D to display available adapters.
+
+:ListLLMAdapters                       *:ListLLMAdapters*
+    List all registered LLM adapters.
+
 ==============================================================================
 3. Configuration                       *llm-configuration*
 
@@ -42,6 +49,19 @@ g:llm_default_model                    *g:llm_default_model*
 g:llm_role                             *g:llm_role*
     The role to use with the LLM.
     Default: 'default-vim-role'
+
+g:llm_default_adapter                  *g:llm_default_adapter*
+    The default LLM adapter to use.
+    Default: 'aichat'
+
+g:llm_adapters                         *g:llm_adapters*
+    A list of adapter names to load at startup. Each name corresponds to
+    a file in autoload/llm/adapters/ (without the .vim extension).
+    Default: ['aichat']
+
+    Example:
+        " Load multiple adapters
+        let g:llm_adapters = ['aichat', 'custom_adapter']
 
 Additional Note:
     The :SetLLMModel command now supports a dynamic completion feature. When
@@ -56,5 +76,7 @@ Basic usage:
     - Type `:LLM How do I improve this code?` to get suggestions.
     - Use `:SetLLMModel model_name` to change the default model.
     - Use `:ListLLMModels` to see available models.
+    - Use `:SetLLMAdapter adapter_name` to change the default adapter.
+    - Use `:ListLLMAdapters` to see available adapters.
 
 Note: Support for visual selection will be added in a future version.

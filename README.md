@@ -118,10 +118,14 @@ This context structure provides several advantages:
 
 By understanding the context structure, you can craft more effective prompts that leverage the information already available to the LLM.
 
+## Code Structure
+
+For a comprehensive explanation of the codebase, including detailed descriptions of each file and how they interact, please see [detailed-info.md](detailed-info.md).
+
 ## Requirements
 
 This plugin requires the 'aichat' command-line tool to be installed and configured on your system.
 
 ## License
 
-MIT License
+This project is licensed under the MIT License - see the [LICENSE.txt](./LICENSE.txt) file for details.

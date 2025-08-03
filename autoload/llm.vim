@@ -53,33 +53,33 @@ function! llm#open_scratch_buffer() abort
   return g:llm_scratch_bufnr
 endfunction
 
-" Process text with an external LLM tool
+" Process text with an external LLM tool using the current adapter
 function! llm#process(json_filename, prompt, model) abort
-  if empty(a:model)
-      let l:model = g:llm_default_model
-  else
-      let l:model = a:model
-  endif
-   if empty(a:prompt)
-      let l:cmd= 'aichat --role default-vim-role --model ' . l:model . ' --file ' . shellescape(a:json_filename)
-   else
-      let l:cmd= 'aichat --role default-vim-role --model ' . l:model . ' --file ' . shellescape(a:json_filename) . ' -- ' . shellescape(a:prompt)
-   endif
-
-   let l:aichat_response = system(l:cmd)
-   return l:aichat_response
+  " Get the current adapter
+  let l:adapter = llm#adapter#get_current()
+  
+  " Use the adapter to process the request
+  return l:adapter.process(a:json_filename, a:prompt, a:model)
 endfunction
 
-" Function to get the list of available models
+" Function to get the list of available models from the current adapter
 function! llm#get_available_models() abort
-  let l:cmd = 'aichat --list-models'
-  let l:models_response = system(l:cmd)
-  return split(l:models_response, "\n")
+  " Get the current adapter
+  let l:adapter = llm#adapter#get_current()
+  
+  " Use the adapter to get available models
+  return l:adapter.get_available_models()
 endfunction
 
 " Function to set the default model
 function! llm#set_default_model(model) abort
   let g:llm_default_model = a:model
+endfunction
+
+" Function to set the default adapter
+function! llm#set_default_adapter(adapter) abort
+  let g:llm_default_adapter = a:adapter
+  call llm#adapter#set_current(a:adapter)
 endfunction
 
 " Main LLM function that gathers context and processes input
