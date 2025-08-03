@@ -1,0 +1,60 @@
+*vim-llm-assistant.txt*  LLM assistant for Vim
+
+                 VIM LLM ASSISTANT DOCUMENTATION                *vim-llm-assistant*
+
+1. Introduction                        |llm-introduction|
+2. Commands                            |llm-commands|
+3. Configuration                       |llm-configuration|
+4. Usage                               |llm-usage|
+
+==============================================================================
+1. Introduction                        *llm-introduction*
+
+vim-llm-assistant is a Vim plugin that integrates Large Language Models (LLMs)
+directly into your Vim workflow. It allows you to interact with LLMs, save
+responses in a dedicated buffer, and customize model selection.
+
+==============================================================================
+2. Commands                            *llm-commands*
+
+:LLM [prompt]                          *:LLM*
+    Process the current buffer and visible buffers with an LLM.
+    If [prompt] is provided, it will be sent as a prompt to the LLM.
+
+:SetLLMModel {model}                   *:SetLLMModel*
+    Set the default LLM model to use. You can now take advantage of enhanced
+    completion: when invoking this command (e.g. by typing :SetLLMModel and then
+    pressing Ctrl‑D), Vim displays a list of available models fetched dynamically
+    via the custom completion function.
+    
+:ListLLMModels                         *:ListLLMModels*
+    List all available LLM models.
+
+==============================================================================
+3. Configuration                       *llm-configuration*
+
+The following variables can be set in your vimrc:
+
+g:llm_default_model                    *g:llm_default_model*
+    The default LLM model to use.
+    Default: 'Alfred:o3-mini'
+
+g:llm_role                             *g:llm_role*
+    The role to use with the LLM.
+    Default: 'default-vim-role'
+
+Additional Note:
+    The :SetLLMModel command now supports a dynamic completion feature. When
+    entering the model name, simply press Ctrl‑D to view the list of models returned
+    by the function llm#get_available_models(). This makes it easier to select the
+    desired model without needing to type it out manually.
+
+==============================================================================
+4. Usage                               *llm-usage*
+
+Basic usage:
+    - Type `:LLM How do I improve this code?` to get suggestions.
+    - Use `:SetLLMModel model_name` to change the default model.
+    - Use `:ListLLMModels` to see available models.
+
+Note: Support for visual selection will be added in a future version.
