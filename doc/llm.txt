@@ -37,7 +37,7 @@ The following variables can be set in your vimrc:
 
 g:llm_default_model                    *g:llm_default_model*
     The default LLM model to use.
-    Default: 'Alfred:o3-mini'
+    Default: 'claude-3-7-sonnet-20250219'
 
 g:llm_role                             *g:llm_role*
     The role to use with the LLM.

@@ -14,13 +14,13 @@ A Vim plugin that integrates Large Language Models (LLMs) directly into your Vim
 ### Using Vim-Plug
 
 ```vim
-Plug 'yourusername/vim-llm-assistant'
+Plug 'g19fanatic/vim-llm-assistant'
 ```
 
 ### Using Vundle
 
 ```vim
-Plugin 'yourusername/vim-llm-assistant'
+Plugin 'g19fanatic/vim-llm-assistant'
 ```
 
 ### Manual Installation
@@ -43,7 +43,7 @@ Add these settings to your `.vimrc` to customize the plugin:
 
 ```vim
 " Set default LLM model
-let g:llm_default_model = 'Alfred:o3-mini'
+let g:llm_default_model = 'claude-3-7-sonnet-20250219'
 
 " Set LLM role
 let g:llm_role = 'default-vim-role'

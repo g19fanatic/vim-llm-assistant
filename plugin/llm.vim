@@ -1,6 +1,6 @@
 " vim-llm-assistant - LLM assistant for Vim
-" Maintainer: Your Name <your.email@example.com>
-" Version: 1.0
+" Maintainer: Paul <paul.a.dibiase@gmail.com>
+" Version: .9
 
 if exists('g:loaded_llm_assistant')
   finish
@@ -9,7 +9,7 @@ let g:loaded_llm_assistant = 1
 
 " Default settings - can be overridden in user's vimrc
 if !exists('g:llm_default_model')
-  let g:llm_default_model = 'Alfred:o3-mini'
+  let g:llm_default_model = 'claude-3-7-sonnet-20250219'
 endif
 
 if !exists('g:llm_role')
