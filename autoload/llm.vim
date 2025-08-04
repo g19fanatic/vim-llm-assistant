@@ -112,6 +112,51 @@ function! llm#add_snippet() abort
   echo "Snippet meta info added for " . l:filename
 endfunction
 
+" Helper: Get buffer content, using snippets if available
+function! llm#get_buffer_content(bufnr, filename) abort
+  " Default to full buffer content
+  let l:contents = join(getbufline(a:bufnr, 1, '$'), "\n")
+  
+  " If the snippet buffer exists, check for override entries for this file
+  if exists('g:llm_snippet_bufnr') && bufexists(g:llm_snippet_bufnr)
+    let l:snip_lines = getbufline(g:llm_snippet_bufnr, 1, '$')
+    let l:found_snippets = []
+    
+    " First pass: collect all snippets for this file
+    for l:snip in l:snip_lines
+      if l:snip =~ '^' . escape(a:filename, '\\') . ':\s'
+        " Expected format: filename: start,end
+        let l:parts = split(l:snip, ':\s\+')
+        if len(l:parts) >= 2
+          let l:meta = l:parts[1]
+          let l:range = split(l:meta, ',')
+          if len(l:range) == 2
+            let l:snip_start = str2nr(l:range[0])
+            let l:snip_end   = str2nr(l:range[1])
+            " Store snippet info for later processing
+            call add(l:found_snippets, {'start': l:snip_start, 'end': l:snip_end})
+          endif
+        endif
+      endif
+    endfor
+    
+    " If we found snippets, replace contents with concatenated snippets
+    if !empty(l:found_snippets)
+      let l:snippets_content = []
+      for l:snippet in l:found_snippets
+        let l:snippet_text = join(getbufline(a:bufnr, l:snippet.start, l:snippet.end), "\n")
+        let l:snippet_header = "--- Snippet from lines " . l:snippet.start . "-" . l:snippet.end . " ---"
+        call add(l:snippets_content, l:snippet_header)
+        call add(l:snippets_content, l:snippet_text)
+      endfor
+      " Join all snippets with newlines and a separator
+      let l:contents = join(l:snippets_content, "\n\n")
+    endif
+  endif
+  
+  return l:contents
+endfunction
+
 " Process text with an external LLM tool using the current adapter
 function! llm#process(json_filename, prompt, model) abort
   " Get the current adapter
@@ -185,34 +230,13 @@ function! llm#run(...) abort
     if empty(l:filename)
       let l:filename = "[No Name]"
     endif
-    let l:contents = join(getbufline(l:bufnr, 1, '$'), "\n")
-    
-    " If the snippet buffer exists, check for an override entry for this file using filename as key
-    if exists('g:llm_snippet_bufnr') && bufexists(g:llm_snippet_bufnr)
-      let l:snip_lines = getbufline(g:llm_snippet_bufnr, 1, '$')
-      for l:snip in l:snip_lines
-        if l:snip =~ '^' . escape(l:filename, '\\') . ':\s'
-          " Expected format: filename: start,end
-          let l:parts = split(l:snip, ':\s\+')
-          if len(l:parts) >= 2
-            let l:meta = l:parts[1]
-            let l:range = split(l:meta, ',')
-            if len(l:range) == 2
-              let l:snip_start = str2nr(l:range[0])
-              let l:snip_end   = str2nr(l:range[1])
-              let l:contents = join(getbufline(l:bufnr, l:snip_start, l:snip_end), "\n")
-            endif
-          endif
-          break
-        endif
-      endfor
-    endif
+    let l:contents = llm#get_buffer_content(l:bufnr, l:filename)
     call add(l:buffers, {'filename': l:filename, 'contents': l:contents})
   endfor
 
   " Gather details for the active buffer.
   let l:active_filename = bufname(l:active_bufnr)
-  let l:active_contents = join(getbufline(l:active_bufnr, 1, '$'), "\n")
+  let l:active_contents = llm#get_buffer_content(l:active_bufnr, l:active_filename)
 
   " Assemble the data dictionary.
   let l:data = {
