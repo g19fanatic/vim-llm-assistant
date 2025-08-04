@@ -35,12 +35,15 @@ endfor
 command! -nargs=? -complete=buffer LLM call llm#run(<q-args>)
 command! -nargs=? -complete=customlist,llm#complete_models SetLLMModel call llm#set_default_model(<q-args>)
 command! -nargs=? -complete=customlist,llm#complete_adapters SetLLMAdapter call llm#set_default_adapter(<q-args>)
+
+command! -range -nargs=? LLMSnip call llm#add_snippet()
+command! ViewLLMSnippets call llm#open_snippet_buffer()
+command! ClearLLMSnippets call llm#clear_snippet_buffer()
 command! ListLLMModels echo llm#get_available_models()
 command! ListLLMAdapters echo llm#adapter#list()
 
 " Define mappings (can be commented out if the user prefers to define their own)
 " nnoremap <leader>ll :LLM<CR>
-" nnoremap <leader>lm :call llm#run('', 1)<CR>
 
 " Custom completion function for SetLLMModel
 function! llm#complete_models(arglead, cmdline, cursorpos) abort

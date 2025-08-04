@@ -53,6 +53,65 @@ function! llm#open_scratch_buffer() abort
   return g:llm_scratch_bufnr
 endfunction
 
+" Functions for the Snippet Scratch Buffer (for context snippets)
+
+" Open or reuse the snippet scratch buffer
+function! llm#open_snippet_buffer() abort
+  if exists('g:llm_snippet_bufnr')
+    if bufloaded(g:llm_snippet_bufnr)
+      " If visible, bring to focus; otherwise, open in a vertical split.
+      for win in range(1, winnr('$'))
+        if winbufnr(win) == g:llm_snippet_bufnr
+          execute win . "wincmd w"
+          return g:llm_snippet_bufnr
+        endif
+      endfor
+      execute 'vertical sbuffer ' . g:llm_snippet_bufnr
+      return g:llm_snippet_bufnr
+    endif
+  endif
+  execute 'vertical new'
+  enew
+  setlocal buftype=nofile
+  setlocal bufhidden=hide
+  setlocal noswapfile
+  setlocal nobuflisted
+  file [LLM-Snippets]
+  let g:llm_snippet_bufnr = bufnr('%')
+  return g:llm_snippet_bufnr
+endfunction
+
+" Clear the snippet scratch buffer explicitly
+function! llm#clear_snippet_buffer() abort
+  if exists('g:llm_snippet_bufnr') && bufexists(g:llm_snippet_bufnr)
+    call setbufline(g:llm_snippet_bufnr, 1, [])
+    echo "[LLM-Snippets] cleared."
+  else
+    echo "No snippet buffer exists."
+  endif
+endfunction
+
+" Add a snippet from the current visual selection to the snippet scratch buffer -- storing only filename and start,end meta info
+function! llm#add_snippet() abort
+  " Get the current buffer's filename
+  let l:filename = bufname('%')
+  if l:filename == ""
+    let l:filename = "[No Name]"
+  endif
+
+  " Get the visual selection's start and end line numbers
+  let l:start = getpos("'<")[1]
+  let l:end   = getpos("'>")[1]
+
+  " Construct an entry in the form: filename: start,end (only meta info)
+  let l:entry = l:filename . ": " . l:start . "," . l:end
+
+  " Open (or create) the snippet scratch buffer and append the entry
+  let l:bufnr = llm#open_snippet_buffer()
+  call append(line('$'), l:entry)
+  echo "Snippet meta info added for " . l:filename
+endfunction
+
 " Process text with an external LLM tool using the current adapter
 function! llm#process(json_filename, prompt, model) abort
   " Get the current adapter
@@ -113,12 +172,13 @@ function! llm#run(...) abort
   " Build a list for buffers' information, skipping:
   "   a) the active buffer (stored separately)
   "   b) the scratch buffer (the llm_history, which is added separately)
+  "   c) the snippet buffer
   let l:buffers = []
   for l:bufnr in l:buf_list
     if l:bufnr == l:active_bufnr
       continue
     endif
-    if exists('g:llm_scratch_bufnr') && l:bufnr == g:llm_scratch_bufnr
+    if (exists('g:llm_scratch_bufnr') && l:bufnr == g:llm_scratch_bufnr) || (exists('g:llm_snippet_bufnr') && l:bufnr == g:llm_snippet_bufnr)
       continue
     endif
     let l:filename = bufname(l:bufnr)
@@ -126,6 +186,27 @@ function! llm#run(...) abort
       let l:filename = "[No Name]"
     endif
     let l:contents = join(getbufline(l:bufnr, 1, '$'), "\n")
+    
+    " If the snippet buffer exists, check for an override entry for this file using filename as key
+    if exists('g:llm_snippet_bufnr') && bufexists(g:llm_snippet_bufnr)
+      let l:snip_lines = getbufline(g:llm_snippet_bufnr, 1, '$')
+      for l:snip in l:snip_lines
+        if l:snip =~ '^' . escape(l:filename, '\\') . ':\s'
+          " Expected format: filename: start,end
+          let l:parts = split(l:snip, ':\s\+')
+          if len(l:parts) >= 2
+            let l:meta = l:parts[1]
+            let l:range = split(l:meta, ',')
+            if len(l:range) == 2
+              let l:snip_start = str2nr(l:range[0])
+              let l:snip_end   = str2nr(l:range[1])
+              let l:contents = join(getbufline(l:bufnr, l:snip_start, l:snip_end), "\n")
+            endif
+          endif
+          break
+        endif
+      endfor
+    endif
     call add(l:buffers, {'filename': l:filename, 'contents': l:contents})
   endfor
 
@@ -150,7 +231,6 @@ function! llm#run(...) abort
   endif
 
   " Always add the scratch buffer's contents as llm_history if it exists
-  " (check only for the existence of the global variable).
   if exists('g:llm_scratch_bufnr')
     let l:history = join(getbufline(g:llm_scratch_bufnr, 1, '$'), "\n")
     let l:data.llm_history = l:history
