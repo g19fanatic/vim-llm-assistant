@@ -8,6 +8,7 @@ A Vim plugin that integrates Large Language Models (LLMs) directly into your Vim
 - Maintain conversation history in a dedicated buffer
 - Select from multiple LLM models
 - Customize prompts and roles
+- Save and load sessions for persistent conversations
 
 ## Installation
 
@@ -36,6 +37,8 @@ Basic commands:
 - `:LLM [prompt]` - Process the current buffer with an LLM, optionally with a prompt
 - `:SetLLMModel model_name` - Set the default LLM model
 - `:ListLLMModels` - Show available LLM models
+- `:SaveLLMSession [filename]` - Save the current LLM session (history, snippets, and tab layout)
+- `:LoadLLMSession filename` - Load a previously saved LLM session
 
 ## Configuration
 
@@ -131,6 +134,31 @@ The plugin is designed around a simple but powerful principle: **what you see is
 This design lets you manage context deliberately, even when working with large projects that have thousands of files.
 
 ## Advanced Usage Techniques
+
+### Session Management
+
+The plugin offers robust session management capabilities, allowing you to save and restore your entire LLM workflow:
+
+```vim
+" Save your current LLM session (with auto-completion)
+:SaveLLMSession my_project
+
+" Load a previously saved session (with auto-completion)
+:LoadLLMSession my_project
+```
+
+Session files are stored in `~/.vim/vim-llm-assistant/sessions/` by default. Each session saves:
+
+- Complete conversation history from the LLM History buffer
+- All defined snippets from the LLM Snippets buffer
+- Current tab layout including opened files
+- Window arrangement within tabs
+
+This allows you to:
+- Maintain long-running conversations across different Vim sessions
+- Share LLM conversations with team members by sharing session files
+- Create specialized environments for different projects or tasks
+- Quickly switch between different conversation contexts
 
 ### Using Temporary Buffers for Context Injection
 

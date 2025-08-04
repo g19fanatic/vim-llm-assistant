@@ -12,6 +12,7 @@ This file initializes the plugin and sets up global variables and commands.
 - **Plugin Initialization**: Checks if plugin is already loaded and sets default settings
 - **Command Definitions**: Creates the `:LLM`, `:SetLLMModel`, `:SetLLMAdapter`, `:ListLLMModels`, and `:ListLLMAdapters` commands
 - **Completion Functions**: `llm#complete_models` and `llm#complete_adapters` provide command completion for the respective commands
+- **Session Management Commands**: Registers the `:SaveLLMSession` and `:LoadLLMSession` commands with appropriate completion
 
 **Global Variables:**
 - `g:llm_default_model`: Default LLM model (defaults to 'claude-3-7-sonnet-20250219')
@@ -50,6 +51,10 @@ This is the core of the plugin, implementing the main functionality.
   5. Calls the adapter to process the request
   6. Displays the response in a scratch buffer with timestamps
   7. Maintains conversation history for subsequent requests
+- **`llm#ensure_session_dir`**: Creates the session directory if it doesn't exist and returns its path
+- **`llm#complete_sessions`**: Lists available session files for command-line completion
+- **`llm#save_session`**: Saves the current LLM session including history, snippets, and tab layout
+- **`llm#load_session`**: Loads a previously saved LLM session from a file
 
 **Response Handling:**
 1. The response from the adapter is read from a temporary file
@@ -57,6 +62,18 @@ This is the core of the plugin, implementing the main functionality.
 3. The response is appended to the scratch buffer with proper formatting
 4. The cursor is positioned at the end of the buffer for easy reading
 5. The scratch buffer is displayed in a window sized to fit the content
+
+**Session Management:**
+1. Session data is stored in `~/.vim/vim-llm-assistant/sessions/` by default
+2. Sessions are saved in JSON format with a `.json` extension
+3. Sessions include:
+   - Complete history from the LLM History buffer
+   - All snippets from the LLM Snippets buffer
+   - Tab layout including file paths for all open windows
+4. Session loading:
+   - Restores history and snippet buffers
+   - Reopens all previously open files in the same tab structure
+   - Maintains window splits and arrangements
 
 ### autoload/llm/adapter.vim
 Defines the adapter interface and registry for LLM backends.
@@ -170,6 +187,52 @@ This structure allows the LLM to:
 3. Access the conversation history for continuity
 4. Provide contextually relevant responses
 
+## Session Management Capabilities
+
+The plugin includes a robust session management system that enables persistence of LLM conversations across different Vim sessions:
+
+### Session Storage
+Sessions are stored as JSON files in the `~/.vim/vim-llm-assistant/sessions/` directory by default. Each session file contains:
+
+1. **History Buffer**: The complete conversation history with timestamps, requests, and responses
+2. **Snippet Buffer**: All currently defined snippets with their metadata
+3. **Tab Layout**: Information about the open tabs and windows including file paths
+
+### Session Commands
+The plugin provides two main commands for session management:
+
+1. **`:SaveLLMSession [filename]`**: 
+   - Saves the current LLM session state to a file
+   - If filename is not provided, prompts the user for one
+   - Automatically appends `.json` extension if not already present
+   - Tab-completion is available for existing session files
+
+2. **`:LoadLLMSession filename`**: 
+   - Loads a previously saved LLM session
+   - Restores the history buffer, snippet buffer, and tab layout
+   - Tab-completion is available to select from existing session files
+
+### Implementation Details
+
+The session system is implemented with these key functions:
+
+1. **`llm#ensure_session_dir`**: Creates the session directory if it doesn't exist
+2. **`llm#complete_sessions`**: Lists available session files for command completion
+3. **`llm#save_session`**: Gathers and saves all session data to a JSON file
+4. **`llm#load_session`**: Restores a session from a saved JSON file
+
+When a session is loaded:
+1. The existing tab layout is cleared with `tabonly`
+2. Each tab from the session is recreated with the same files and window splits
+3. The LLM History buffer is populated with the saved conversation
+4. The LLM Snippets buffer is populated with the saved snippets
+
+This system enables users to:
+- Maintain long-running conversations across different Vim sessions
+- Share LLM conversations with team members by sharing session files
+- Create specialized contexts for different projects or tasks
+- Quickly switch between different conversation threads
+
 ## Snipping Capabilities
 
 The plugin includes a powerful snipping system that allows you to be more precise and selective about what context is sent to the LLM. This feature is particularly useful when:
@@ -233,6 +296,7 @@ This snipping capability provides fine-grained control over the context, making 
    - It loads the adapters specified in `g:llm_adapters`
    - Each adapter registers itself with the adapter registry in `autoload/llm/adapter.vim`
    - Commands are set up with appropriate completion functions
+   - Session management commands are registered with appropriate completion functions
 
 2. **Command Flow**:
    - When `:LLM` is called, it invokes `llm#run()`
@@ -244,7 +308,19 @@ This snipping capability provides fine-grained control over the context, making 
    - The response is read, timestamped, and displayed in a scratch buffer
    - The history is updated for future requests
 
-3. **Adapter System**:
+3. **Session Management Flow**:
+   - When `:SaveLLMSession` is called, it:
+     1. Ensures the session directory exists
+     2. Gets content from the history and snippet buffers
+     3. Captures the tab and window layout information
+     4. Saves all this data as a JSON file
+   - When `:LoadLLMSession` is called, it:
+     1. Reads the specified JSON file
+     2. Creates or populates the history and snippet buffers
+     3. Restores the tab layout by opening files in the right configuration
+   - Both commands offer tab-completion for existing session files
+
+4. **Adapter System**:
    - The adapter interface in `autoload/llm/adapter.vim` defines a common API
    - Adapters implement this interface and register themselves
    - The plugin can switch between different adapters through the `:SetLLMAdapter` command
@@ -252,18 +328,20 @@ This snipping capability provides fine-grained control over the context, making 
    - Adapters can be implemented for different LLM backends (API-based, local models, etc.)
    - The adapter system abstracts away the details of how the LLM is called
 
-4. **Response Handling**:
+5. **Response Handling**:
    - Responses are displayed in a dedicated scratch buffer
    - Timestamps are added to both requests and responses
    - The buffer is formatted for readability with syntax highlighting
    - The conversation history is maintained for context in future requests
    - The scratch buffer is non-modifiable to preserve the conversation history
+   - The conversation history can be saved as part of a session for later use
 
-5. **Extensibility Points**:
+6. **Extensibility Points**:
    - New adapters can be added by implementing the adapter interface
    - The role/system prompt can be customized
    - Default models and adapters can be configured
    - The JSON context structure provides a standardized way to pass information to any LLM
    - The snippet system allows for precise context control
+   - The session system enables persistent conversations across Vim instances
 
-This architecture provides flexibility and extensibility while maintaining a simple user interface. The adapter pattern allows for supporting different LLM backends, and the JSON context provides the LLM with rich information about the current Vim session.
+This architecture provides flexibility and extensibility while maintaining a simple user interface. The adapter pattern allows for supporting different LLM backends, and the JSON context provides the LLM with rich information about the current Vim session. The session management system adds persistence, allowing users to save and restore their LLM interactions across different Vim sessions.

@@ -54,3 +54,7 @@ endfunction
 function! llm#complete_adapters(arglead, cmdline, cursorpos) abort
   return llm#adapter#list()
 endfunction
+
+" Create commands for session management
+command! -nargs=? -complete=customlist,llm#complete_sessions SaveLLMSession call llm#save_session(<q-args>)
+command! -nargs=? -complete=customlist,llm#complete_sessions LoadLLMSession call llm#load_session(<q-args>)

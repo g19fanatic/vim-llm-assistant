@@ -299,3 +299,207 @@ function! llm#run(...) abort
   " Return focus to the previous window.
   wincmd p
 endfunction
+
+" Ensure session directory exists
+function! llm#ensure_session_dir() abort
+  let l:session_dir = expand('~/.vim/vim-llm-assistant/sessions')
+  if !isdirectory(l:session_dir)
+    call mkdir(l:session_dir, 'p')
+  endif
+  return l:session_dir
+endfunction
+
+" List available session files for completion
+function! llm#complete_sessions(arglead, cmdline, cursorpos) abort
+  let l:session_dir = llm#ensure_session_dir()
+  let l:files = readdir(l:session_dir)
+  return filter(l:files, 'v:val =~ ''^'' . a:arglead')
+endfunction
+
+" Save current LLM session including history, snippets, and tab layout
+function! llm#save_session(filename) abort
+  " Get session directory
+  let l:session_dir = llm#ensure_session_dir()
+  
+  " If no filename provided, prompt for one
+  let l:filename = a:filename
+  if l:filename == ""
+    let l:filename = input('Enter filename to save LLM session: ')
+    if l:filename == ""
+      echo "No filename provided, aborting session save."
+      return
+    endif
+  endif
+  
+  " Ensure filename has .json extension
+  if l:filename !~ '\.json$'
+    let l:filename .= '.json'
+  endif
+  
+  " If not absolute path, prepend session directory
+  if l:filename !~ '^/'
+    let l:filepath = l:session_dir . '/' . l:filename
+  else
+    let l:filepath = l:filename
+  endif
+  
+  " Build session dictionary
+  let l:session = {}
+  
+  " Save history buffer content if it exists
+  let l:history_bufnr = bufnr('[LLM-Scratch]')
+  if l:history_bufnr != -1
+    let l:session.history = getbufline(l:history_bufnr, 1, '$')
+  else
+    let l:session.history = []
+  endif
+  
+  " Save snippet buffer content if it exists
+  let l:snippet_bufnr = bufnr('[LLM-Snippets]')
+  if l:snippet_bufnr != -1
+    let l:session.snippets = getbufline(l:snippet_bufnr, 1, '$')
+  else
+    let l:session.snippets = []
+  endif
+  
+  " Collect all visible files across all tabs
+  let l:session.visible_files = []
+  for l:tab in gettabinfo()
+    for l:winid in l:tab.windows
+      call win_execute(l:winid, 'let g:llm_temp_fname = expand("%:p")')
+      if g:llm_temp_fname != ""
+        " Handle special buffers - store just the name for LLM-Scratch and LLM-Snippets
+        let l:fname_to_store = g:llm_temp_fname
+        if g:llm_temp_fname =~ '\[LLM-\(Scratch\|Snippets\)\]$'
+          let l:fname_to_store = fnamemodify(g:llm_temp_fname, ':t')
+        endif
+        if index(l:session.visible_files, l:fname_to_store) == -1
+          call add(l:session.visible_files, l:fname_to_store)
+        endif
+      endif
+    endfor
+  endfor
+  
+  " Save tab and window layout
+  let l:session.tabs = []
+  for l:tab in gettabinfo()
+    let l:tab_entry = {}
+    let l:tab_entry.windows = []
+    for l:winid in l:tab.windows
+      call win_execute(l:winid, 'let g:llm_temp_fname = expand("%:p")')
+      if g:llm_temp_fname != "" 
+        " Handle special buffers - store just the name for LLM-Scratch and LLM-Snippets
+        let l:fname_to_store = g:llm_temp_fname
+        if g:llm_temp_fname =~ '\[LLM-\(Scratch\|Snippets\)\]$'
+          let l:fname_to_store = fnamemodify(g:llm_temp_fname, ':t')
+        endif
+
+        call add(l:tab_entry.windows, l:fname_to_store)
+      endif
+    endfor
+    call add(l:session.tabs, l:tab_entry)
+  endfor
+  
+  " Save to file
+  let l:json = json_encode(l:session)
+  call writefile(split(l:json, "\n"), l:filepath)
+  echo "LLM session saved to " . l:filepath
+endfunction
+
+" Load LLM session from file
+function! llm#load_session(filename) abort
+  " Get session directory
+  let l:session_dir = llm#ensure_session_dir()
+  
+  " If no filename provided, abort
+  if a:filename == ""
+    echo "No filename provided, aborting session load."
+    return
+  endif
+  
+  " If not absolute path, prepend session directory
+  if a:filename !~ '^/'
+    let l:filepath = l:session_dir . '/' . a:filename
+    if !filereadable(l:filepath) && filereadable(l:session_dir . '/' . a:filename . '.json')
+      let l:filepath .= '.json'
+    endif
+  else
+    let l:filepath = a:filename
+  endif
+  
+  " Check if file exists
+  if !filereadable(l:filepath)
+    echoerr "Session file " . l:filepath . " not found!"
+    return
+  endif
+  
+  " Read and decode the JSON file
+  let l:lines = readfile(l:filepath)
+  let l:session = json_decode(join(l:lines, "\n"))
+  
+  " Create or populate the history buffer
+  if has_key(l:session, 'history') && !empty(l:session.history)
+    let l:history_bufnr = llm#open_scratch_buffer()
+    call setbufvar(l:history_bufnr, '&buftype', 'nofile')
+    call setbufvar(l:history_bufnr, '&swapfile', 0)
+    
+    " Clear and populate the buffer
+    call deletebufline(l:history_bufnr, 1, '$')
+    call setbufline(l:history_bufnr, 1, l:session.history)
+    call setbufvar(l:history_bufnr, '&modified', 0)
+  endif
+  
+  " Create or populate the snippet buffer
+  if has_key(l:session, 'snippets') && !empty(l:session.snippets)
+    let l:snippet_bufnr = llm#open_snippet_buffer()
+    call setbufvar(l:snippet_bufnr, '&buftype', 'nofile')
+    call setbufvar(l:snippet_bufnr, '&swapfile', 0)
+    
+    " Clear and populate the buffer
+    call deletebufline(l:snippet_bufnr, 1, '$')
+    call setbufline(l:snippet_bufnr, 1, l:session.snippets)
+    call setbufvar(l:snippet_bufnr, '&modified', 0)
+  endif
+  
+  " Add all visible files to the argument list
+  if has_key(l:session, 'visible_files') && !empty(l:session.visible_files)
+    " Add all files to the argument list (without clearing first)
+    for l:file in l:session.visible_files
+      execute 'argadd ' . fnameescape(l:file)
+    endfor
+  endif
+  
+  " Restore the tab and window layout
+  if has_key(l:session, 'tabs')
+    " Close all current tabs
+    silent! tabonly
+    
+    " Open each tab and its windows
+    let l:tindex = 0
+    for l:tab in l:session.tabs
+      if l:tindex > 0
+        tabnew
+      endif
+      
+      let l:windex = 0
+      for l:file in l:tab.windows
+        if l:windex == 0
+          " Special handling for LLM buffers
+          if l:file == '[LLM-Scratch]'
+            call llm#open_scratch_buffer()
+          elseif l:file == '[LLM-Snippets]'
+            call llm#open_snippet_buffer()
+          else
+            execute 'edit ' . fnameescape(l:file)
+          endif
+        else
+          execute 'vsplit ' . fnameescape(l:file)
+        endif
+        let l:windex += 1
+      endfor
+      let l:tindex += 1
+    endfor
+  endif
+  
+  echo "LLM session loaded from " . l:filepath
+endfunction
