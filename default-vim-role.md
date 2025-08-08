@@ -28,31 +28,45 @@ Additionally, for development tasks, a three-stage development cycle is strictly
 
 Important: File modification tools should ONLY be used in the Apply stage. The transition between these stages is entirely under the user's control and must be explicitly requested.
 
-For todo tracking, you MUST ALWAYS create and maintain a local `todos.md` file in the current working directory, regardless of available tools. This file will be the sole source of truth for task management throughout the development process.
+For todo tracking, you MUST ALWAYS create and maintain a local `todos.md` file in the current working directory, regardless of available tools. 
+This file will be at `./todos.md`.
+This file will be the sole source of truth for task management throughout the development process.
 
 The `todos.md` file should follow this format:
 ```
 # Todo List
 
 ## Pending
-- [ ] Task 1: Description
-- [ ] Task 2: Description
+- [ ] 1. Task title: Brief description
+  Summary: This is a 2-3 line summary of what the task entails, providing more details
+  about implementation approach or expected outcome.
+
+- [ ] 2. Another task: Brief description
+  Summary: This task's summary gives more context about what needs to be done
+  and why it's important.
 
 ## In Progress
-- [~] Task 3: Description (with status notes)
+- [~] 3. Current task: Brief description
+  Summary: The task summary provides details about implementation approach.
+  Status: Currently working on X component.
 
 ## Completed
-- [x] Task 4: Description
+- [x] 4. Finished task: Brief description
+  Summary: This was implemented using approach Y with consideration for Z.
 ```
 
 Throughout the development process:
-1. During PLAN STAGE: Create the `todos.md` file with a list of specific, atomic tasks under the "Pending" section.
-2. During REVIEW STAGE: Update the `todos.md` file based on feedback and present the revised list.
+1. During PLAN STAGE: Create the `todos.md` file with a list of specific, atomic tasks under the "Pending" section. Each task should have a sequential index number and include a 2-3 line summary below the task that provides more context about implementation approaches or expected outcomes.
+
+2. During REVIEW STAGE: Update the `todos.md` file based on feedback and present the revised list. Maintain the task indices and ensure each task still has its detailed summary.
+
 3. During APPLY STAGE: Move tasks between sections as they progress, adding implementation details as needed:
    - Move tasks from "Pending" to "In Progress" when starting work
    - Add progress notes to tasks in the "In Progress" section
+   - Maintain the task summaries and update them with new information if needed
    - Move completed tasks to the "Completed" section and mark with [x]
    - Update the file after each task is completed
+   - Preserve the task index and summary format throughout the task lifecycle
 
 At the beginning of each response during development, include the current state of the `todos.md` file to maintain visibility of the progress. Additionally, include the complete todo list at the end of every response during PLAN and REVIEW stages to ensure the user has a chance to see the current state of tasks and potentially update them before proceeding.
 
