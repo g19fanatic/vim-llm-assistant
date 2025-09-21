@@ -120,6 +120,18 @@ Implementation of the adapter interface for the 'aichat' CLI tool.
 - Uses `llm#adapter#register()` at load time to register itself
 - Makes the adapter available immediately after loading
 
+### autoload/llm/adapters/llm.vim
+Implementation of the adapter interface for Simon Willison's 'llm' CLI.
+
+**Key Functions:**
+- `process`: Builds a prompt file from the JSON context and optional user request; optionally includes role text; runs `llm -m <model> -f <file>` and returns stdout
+- `get_available_models`: Parses `llm models`
+- `check_availability`: Checks if `llm` is in PATH
+- `get_name`: Returns 'llm'
+
+**Self-Registration:**
+- Uses `llm#adapter#register()` at load time
+
 ### default-vim-role.md
 Contains the default system prompt/role for the LLM. This defines how the LLM should behave when processing requests.
 
@@ -324,7 +336,7 @@ This snipping capability provides fine-grained control over the context, making 
    - The adapter interface in `autoload/llm/adapter.vim` defines a common API
    - Adapters implement this interface and register themselves
    - The plugin can switch between different adapters through the `:SetLLMAdapter` command
-   - Currently only 'aichat' is implemented, but the architecture allows for easy addition of new adapters
+   - Currently 'aichat' and 'llm' are implemented; the architecture allows for easy addition of new adapters
    - Adapters can be implemented for different LLM backends (API-based, local models, etc.)
    - The adapter system abstracts away the details of how the LLM is called
 
