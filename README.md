@@ -274,7 +274,7 @@ For a comprehensive explanation of the codebase, including detailed descriptions
 
 ## Requirements
 
-This project requires the 'aichat' command-line tool to be installed and configured on your system.
+This project works with either the ['aichat'](https://github.com/sigoden/aichat) or ['llm'](https://github.com/simonw/llm) CLI. Install and configure one (or both), then select via :SetLLMAdapter.
 
 ## License
 
