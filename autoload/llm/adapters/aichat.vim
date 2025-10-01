@@ -10,14 +10,47 @@ function! s:aichat_adapter.process(json_filename, prompt, model) abort
     let l:model = a:model
   endif
   
+  " Generate a unique temporary filename for tool output
+  let l:temp_file = tempname()
+  
   if empty(a:prompt)
-    let l:cmd= 'aichat --role ' . g:llm_role . ' --model ' . l:model . ' --file ' . shellescape(a:json_filename)
+    let l:cmd = 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' --file ' . shellescape(a:json_filename)
   else
-    let l:cmd= 'aichat --role ' . g:llm_role . ' --model ' . l:model . ' --file ' . shellescape(a:json_filename) . ' -- ' . shellescape(a:prompt)
+    let l:cmd = 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' --file ' . shellescape(a:json_filename) . ' -- ' . shellescape(a:prompt)
   endif
 
+  " Execute aichat and get the standard response
   let l:aichat_response = system(l:cmd)
-  return l:aichat_response
+  
+  " Read the tool output from the temporary file
+  let l:tool_output = ""
+  if filereadable(l:temp_file)
+    let l:tool_output = join(readfile(l:temp_file), "\n")
+  endif
+  
+  " Process the tool output to add markdown italics to each line
+  let l:formatted_tool_output = ""
+  if !empty(l:tool_output)
+    " Split the output into lines and add italics to each line
+    let l:lines = split(l:tool_output, "\n")
+    for l:line in l:lines
+      let l:formatted_tool_output .= "*" . l:line . "*\n"
+    endfor
+  endif
+  
+  " Combine the responses
+  let l:combined_response = l:aichat_response
+  if !empty(l:formatted_tool_output)
+    let l:combined_response = "=== Tool Output ===\n" . l:formatted_tool_output . "\n=== AI Response ===\n" . l:aichat_response
+  endif
+  
+  " Clean up the temporary file
+  if filereadable(l:temp_file)
+    call delete(l:temp_file)
+  endif
+  
+  " Return the combined response
+  return l:combined_response
 endfunction
 
 " Get available models from aichat
