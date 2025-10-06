@@ -166,6 +166,20 @@ function! llm#process(json_filename, prompt, model) abort
   return l:adapter.process(a:json_filename, a:prompt, a:model)
 endfunction
 
+" Add a function to show the job is running
+function! llm#show_job_status() abort
+  if exists('g:llm_current_job') && g:llm_current_job != 0 && job_status(g:llm_current_job) == 'run'
+    echo "LLM request in progress..."
+  else
+    echo "No active LLM requests."
+  endif
+endfunction
+
+" Initialize global job tracking
+if !exists('g:llm_current_job')
+  let g:llm_current_job = 0
+endif
+
 " Function to get the list of available models from the current adapter
 function! llm#get_available_models() abort
   " Get the current adapter
@@ -263,12 +277,32 @@ function! llm#run(...) abort
   " Convert the data dictionary to JSON.
   let l:json_data = llm#encode(l:data)
 
+  " Handle potential race conditions with concurrent jobs
+  if exists('g:llm_current_job') && g:llm_current_job != 0 && job_status(g:llm_current_job) == 'run'
+    " Either queue the new request or warn the user
+    let l:choice = confirm("A request is already in progress. What would you like to do?", 
+          \ "&Wait\n&Cancel previous\n&Run concurrent", 1)
+    if l:choice == 1
+      " Wait for current job
+      echo "Waiting for current request to complete..."
+      while g:llm_current_job != 0 && job_status(g:llm_current_job) == 'run'
+        sleep 100m
+      endwhile
+    elseif l:choice == 2
+      " Cancel previous job
+      call job_stop(g:llm_current_job)
+      while g:llm_current_job != 0 && job_status(g:llm_current_job) == 'run'
+        sleep 10m
+      endwhile
+    endif
+  endif
+
   " Write the JSON data to a temporary file.
   let l:tempfile = tempname()
   call writefile(split(l:json_data, "\n"), l:tempfile)
 
   " Call the external LLM agent function using the temporary file and prompt.
-  let l:response = llm#process(l:tempfile, l:prompt, l:model)
+  let l:job = llm#process(l:tempfile, l:prompt, l:model)
 
   " Open (or reuse) the scratch buffer and switch to it.
   let l:scratch_buf = llm#open_scratch_buffer()
@@ -284,14 +318,11 @@ function! llm#run(...) abort
     let l:last_line += 1
   endif
 
-  " Append the LLM response line by line.
-  for l:line in split(l:response, "\n")
-    call append(l:last_line + 1, l:line)
-    let l:last_line += 1
-  endfor
-
-  " Append a blank line after the entry.
-  call append(l:last_line + 1, '')
+  " Add "Response:" line
+  call append(l:last_line + 1, 'Response:')
+  
+  " Store the new job
+  let g:llm_current_job = l:job
 
   " Scroll to the bottom of the scratch buffer.
   execute 'normal! G'
