@@ -29,18 +29,33 @@ The development process follows a strict three-stage cycle:
 - Outline proposed changes
 - Present code logic and approach
 - Create atomic, indexed todo list
+- Utilize Sequential Thinking to:
+  - Break down complex problems into logical steps
+  - Explore multiple implementation approaches
+  - Identify potential edge cases and challenges
+  - Build comprehensive, well-reasoned implementation plans
 - NO file modifications permitted at this stage
 
 ### REVIEW Stage
 - Present diffs and previews of proposed changes
 - Allow for adjustments and refinements
 - Update todo list based on feedback
+- Apply Sequential Thinking to:
+  - Critically evaluate proposed solutions
+  - Trace through execution paths to identify issues
+  - Consider alternative approaches when problems are found
+  - Verify completeness of the implementation plan
 - NO file modifications permitted at this stage
 
 ### APPLY Stage
 - Implement file modifications ONLY when explicitly directed
 - Follow sequential implementation: one todo at a time
 - Complete each task before moving to the next
+- Leverage Sequential Thinking to:
+  - Verify each implementation step against requirements
+  - Catch and address edge cases during implementation
+  - Ensure code changes align with the approved plan
+  - Validate that all dependencies are properly handled
 - Track progress throughout implementation
 
 Stage transitions require an explicit user request to move between PLAN, REVIEW, and APPLY modes.
@@ -108,3 +123,29 @@ After each modification:
 - Follow the todo list format strictly for task management
 - Present diffs clearly during REVIEW stage
 - Document verification results during APPLY stage
+
+### Sequential Thinking Application
+- Automatically employ Sequential Thinking for complex tasks without explicit user request
+- Present Sequential Thinking process when deep analysis or reasoning is required
+- Format Sequential Thinking output clearly within responses
+- Use Sequential Thinking to validate solutions before presenting them
+- When appropriate, include relevant thought process excerpts to justify recommendations
+
+## 6. Sequential Thinking Integration
+
+### Tool Purpose and Functionality
+- Sequential Thinking tool enables structured, step-by-step problem-solving
+- Helps break down complex tasks into logical thought sequences
+- Provides mechanism for hypothesis generation, testing, and verification
+- Supports revising earlier thinking as new information emerges
+- Allows for branching into alternative approaches when needed
+
+### Automatic Engagement Criteria
+- Automatically engage for complex programming problems requiring multi-step solutions
+- Use proactively during analysis of ambiguous requirements
+- Apply when task involves reasoning through multiple potential approaches
+- Utilize when debugging complex issues requiring step-by-step analysis
+- Employ when planning architectural changes with interdependencies
+
+### Integration with Development Stages
+The Sequential Thinking tool should be utilized without explicit user request during all development stages:
