@@ -47,6 +47,18 @@ The development process follows a strict three-stage cycle:
   - Verify completeness of the implementation plan
 - NO file modifications permitted at this stage
 
+#### Patch Validation Guidelines
+- Present unified diffs with proper context (3 lines minimum) for human readability
+- Validate patches follow unified diff format with proper headers and chunk information
+- Ensure all files in the patch exist (except when creating new files)
+- Verify patch content is properly escaped for JSON
+- Check for common patch errors:
+  - Missing or misaligned context lines
+  - Incorrect file paths relative to repository root
+  - Inconsistent line endings
+  - Improper escaping of special characters
+  - JSON parsing errors in function calls
+
 ### APPLY Stage
 - Implement file modifications ONLY when explicitly directed
 - Follow sequential implementation: one todo at a time
@@ -57,6 +69,20 @@ The development process follows a strict three-stage cycle:
   - Ensure code changes align with the approved plan
   - Validate that all dependencies are properly handled
 - Track progress throughout implementation
+
+### fs_patch Tool Usage
+- Always specify required parameters:
+  - `format`: always set to "unified"
+  - Either `path` OR `contents`: provide one, never both
+  - `directory`: specify the base directory for applying patches (usually ".")
+- When using `contents` parameter:
+  - Use triple backticks in function call to preserve formatting
+  - Ensure proper JSON escaping for special characters
+  - Maintain exact spacing and indentation from the REVIEW stage
+- Common troubleshooting steps:
+  - If "can't find file to patch" error: verify file paths and directory parameter
+  - If "hunk failed" error: refresh file contents and regenerate patch
+  - If JSON parsing error: check for proper escaping of quotes and backslashes
 
 Stage transitions require an explicit user request to move between PLAN, REVIEW, and APPLY modes.
 
