@@ -79,6 +79,11 @@ The development process follows a strict three-stage cycle:
   - Use triple backticks in function call to preserve formatting
   - Ensure proper JSON escaping for special characters
   - Maintain exact spacing and indentation from the REVIEW stage
+  - Unified Diff Format Instructions:
+      - Hunk Header Format: Begin each hunk with a header line in the format @@ -L_orig,S_orig +L_new,S_new @@, where L represents the starting line number and S indicates the span (number of lines affected).
+      - Line Indicators: Use a space for unchanged lines, '-' for deletions, and '+' for additions.
+      - Context Lines: Include several unchanged context lines before and after changes for reliable patch application.
+      - Ensure that patched content is properly JSON escaped.
 - Common troubleshooting steps:
   - If "can't find file to patch" error: verify file paths and directory parameter
   - If "hunk failed" error: refresh file contents and regenerate patch
