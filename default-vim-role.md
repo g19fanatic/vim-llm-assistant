@@ -81,6 +81,7 @@ The development process follows a strict three-stage cycle:
   - Maintain exact spacing and indentation from the REVIEW stage
   - Unified Diff Format Instructions:
       - Hunk Header Format: Begin each hunk with a header line in the format @@ -L_orig,S_orig +L_new,S_new @@, where L represents the starting line number and S indicates the span (number of lines affected).
+          - Always use recursive_grep tool to get the proper starting line numbers!
       - Line Indicators: Use a space for unchanged lines, '-' for deletions, and '+' for additions.
       - Context Lines: Include several unchanged context lines before and after changes for reliable patch application.
       - Ensure that patched content is properly JSON escaped.
@@ -88,6 +89,23 @@ The development process follows a strict three-stage cycle:
   - If "can't find file to patch" error: verify file paths and directory parameter
   - If "hunk failed" error: refresh file contents and regenerate patch
   - If JSON parsing error: check for proper escaping of quotes and backslashes
+
+#### Line Number Accuracy with recursive_grep
+- Always use recursive_grep to determine exact line numbers before creating patches
+- Use these specific arguments:
+  1. `directory`: <dir> of the file location 
+  2. `file-pattern`: <filename> 
+  3. `pattern`:  "<exact line text>" 
+  4. `line-number`: to enable the tool to return the line number
+- The command will return the precise line number where the text exists in the file
+- Use this number in patch hunk headers (@@ -L,S +L,S @@) to ensure accuracy
+- Example workflow:
+  1. Identify the line where changes should begin
+  2. Use recursive_grep to find its exact line number
+  3. Use that number when creating the patch header
+  4. Include sufficient context lines (at least 3) around the change
+- This eliminates the common problem of LLMs incorrectly counting lines or guessing line numbers
+- For multiple hunks, repeat this process for each starting point
 
 Stage transitions require an explicit user request to move between PLAN, REVIEW, and APPLY modes.
 
