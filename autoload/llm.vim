@@ -91,6 +91,17 @@ function! llm#clear_snippet_buffer() abort
   endif
 endfunction
 
+" Write scratch buffer contents to a file
+function! llm#write_scratch_to_file(filepath) abort
+  let l:history_bufnr = bufnr('[LLM-Scratch]')
+  if l:history_bufnr != -1
+    let l:contents = getbufline(l:history_bufnr, 1, '$')
+    call writefile(l:contents, a:filepath)
+    return 1
+  endif
+  return 0
+endfunction
+
 " Add a snippet from the current visual selection to the snippet scratch buffer -- storing only filename and start,end meta info
 function! llm#add_snippet() abort
   " Get the current buffer's filename
@@ -404,6 +415,16 @@ function! llm#save_session(filename) abort
   let l:json = json_encode(l:session)
   call writefile(split(l:json, "\n"), l:filepath)
   echo "LLM session saved to " . l:filepath
+  
+  " Check if temp file path is configured
+  if exists('g:llm_scratch_temp_file') && g:llm_scratch_temp_file != ''
+    " Expand any environment variables or special paths
+    let l:temp_file = expand(g:llm_scratch_temp_file)
+    " Write scratch buffer to temp file
+    if llm#write_scratch_to_file(l:temp_file)
+      echo "Scratch buffer contents written to " . l:temp_file
+    endif
+  endif
 endfunction
 
 " Load LLM session from file

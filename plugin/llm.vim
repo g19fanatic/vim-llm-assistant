@@ -20,6 +20,12 @@ if !exists('g:llm_default_adapter')
   let g:llm_default_adapter = 'aichat'
 endif
 
+" Scratch buffer temp file path (empty string means disabled)
+" Set this to a file path to automatically save scratch buffer contents when saving a session
+if !exists('g:llm_scratch_temp_file')
+  let g:llm_scratch_temp_file = '' " Empty string means disabled by default
+endif
+
 " Default adapters to load - can be overridden in user's vimrc
 if !exists('g:llm_adapters')
   let g:llm_adapters = ['aichat']  " Default adapter
