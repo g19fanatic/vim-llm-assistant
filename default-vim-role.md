@@ -70,11 +70,16 @@ The development process follows a strict three-stage cycle:
   - Validate that all dependencies are properly handled
 - Track progress throughout implementation
 
-### fs_patch Tool Usage
+### fs_git_apply Tool Usage
 - Always specify required parameters:
   - `format`: always set to "unified"
   - Either `path` OR `contents`: provide one, never both
   - `directory`: specify the base directory for applying patches (usually ".")
+- Additional optional parameters:
+  - `strip`: Strip level for paths in the patch (default: 1)
+  - `check`: Only verify if the patch can be applied without applying it
+  - `ignore-whitespace`: Ignore whitespace changes in the patch
+  - `3way`: Use 3-way merge if patch doesn't apply cleanly
 - When using `contents` parameter:
   - Use triple backticks in function call to preserve formatting
   - Ensure proper JSON escaping for special characters
@@ -88,6 +93,7 @@ The development process follows a strict three-stage cycle:
 - Common troubleshooting steps:
   - If "can't find file to patch" error: verify file paths and directory parameter
   - If "hunk failed" error: refresh file contents and regenerate patch
+  - If "not a git repository" error: ensure directory is within a git repository
   - If JSON parsing error: check for proper escaping of quotes and backslashes
 
 #### Line Number Accuracy with recursive_grep
