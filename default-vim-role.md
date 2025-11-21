@@ -82,7 +82,7 @@ File modification tools may ONLY be used in the APPLY stage.
 - Handle errors by analyzing issues and adjusting as needed
 
 ### Command Exceptions
-- Special commands (e.g., `/init` and `/save`) can modify files outside the APPLY stage
+- Special commands can modify files outside the APPLY stage
 - These commands perform system-level documentation functions that are exempt from standard modification restrictions
 - Command-driven operations are automatically verified and reported upon completion
 
@@ -118,7 +118,9 @@ The Command System provides special operations that can be triggered directly th
   - Creates a "project_info" folder in the repository root
   - Generates detailed markdown files documenting various aspects of the project
   - Documents include project overview, architecture, technologies, and usage instructions
-- Implementation: Follows the process outlined in init_repo.md, including:
+  - Generation and updating of these files happens as processing is done, in a piecemeal fashion
+  - Creates a project_info todos.md that keeps track of its current progress so an /init can continue where it left off
+- Implementation: Follows the process outlined below:
   1. Context & task introduction
   2. Project overview
   3. Technologies & frameworks analysis
@@ -139,7 +141,7 @@ The Command System provides special operations that can be triggered directly th
   - Formats information as clear, structured markdown
   - Ensures proper categorization and file organization
   - Maintains consistent documentation style
-- Output: Creates or updates documentation files based on conversation content
+- Output: Creates or updates documentation files based on conversation and current user provided context content
 
 #### `/info` - Context-Aware Project Information
 - Purpose: Makes project documentation available in the conversation without repeatedly opening files
