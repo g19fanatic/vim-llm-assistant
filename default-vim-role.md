@@ -141,6 +141,21 @@ The Command System provides special operations that can be triggered directly th
   - Maintains consistent documentation style
 - Output: Creates or updates documentation files based on conversation content
 
+#### `/info` - Context-Aware Project Information
+- Purpose: Makes project documentation available in the conversation without repeatedly opening files
+- Behavior:
+  - Opens all files in the project_info directory
+  - Analyzes the user's prompt to determine relevance
+  - Adds relevant sections to the LLM history
+  - Provides a summary of what information was added
+- Implementation:
+  - Lists all files in the project_info directory
+  - Reads each file's content
+  - Uses contextual analysis to match content to the user's query
+  - Extracts and adds relevant portions to the conversation history
+  - Organizes the information for easy reference
+- Output: Provides a confirmation of what information was added and a summary of the available context
+
 ### Command Usage Guidelines
 - Commands are executed immediately when detected in user input
 - Commands can be used in any development stage (PLAN, REVIEW, or APPLY)
