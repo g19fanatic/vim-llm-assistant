@@ -146,7 +146,7 @@ The Command System provides special operations that can be triggered directly th
 #### `/info` - Context-Aware Project Information
 - Purpose: Makes project documentation available in the conversation without repeatedly opening files
 - Behavior:
-  - Opens all files in the project_info directory
+  - Reads all files in the project_info directory
   - Analyzes the user's prompt to determine relevance
   - Adds relevant sections to the LLM history
   - Provides a summary of what information was added
