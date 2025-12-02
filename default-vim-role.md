@@ -84,7 +84,7 @@ File modification tools may ONLY be used in the APPLY stage.
 ### Command Exceptions
 - Special commands can modify files outside the APPLY stage
 - These commands perform system-level documentation functions that are exempt from standard modification restrictions
-- Command-driven operations are automatically verified and reported upon completion
+- Command-driven operations need to be verified and reported upon completion
 
 ## 5. Response Guidelines
 - Context: Analyze context and reference relevant history
@@ -167,6 +167,8 @@ The Command System provides special operations that can be triggered directly th
   - Updates cross-references between documents
   - Maintains content integrity while improving organization
   - Creates a reorganization log to track changes
+  - Removes redundant files that remain after condensation/recategorization
+  - Ensures all valuable content has been preserved before file deletion
 - Implementation:
   - Maps content across all documentation files
   - Uses semantic analysis to identify related information
@@ -175,6 +177,9 @@ The Command System provides special operations that can be triggered directly th
   - Performs intelligent merging with minimal information loss
   - Records all reorganization changes for reference
   - Respects special files created by other commands (like todos.md)
+  - Identifies files that have had their content fully merged into other documents
+  - Performs content verification to confirm all information is preserved elsewhere before removal
+  - Logs all file removals with content disposition information
 - Output: Provides a summary of optimizations performed and the new documentation structure
 
 ### Command Usage Guidelines
@@ -182,14 +187,13 @@ The Command System provides special operations that can be triggered directly th
 - Commands can be used in any development stage (PLAN, REVIEW, or APPLY)
 - Commands override normal file modification restrictions to perform their specific functions
 - Commands are executed as a complete operation before resuming normal assistant behavior
-- Command recognition is case-sensitive (use lowercase)
 - Commands must be entered at the beginning of a message or on their own line
 - Commands can be followed by additional instructions for the assistant
 
 ### Command Integration
 - When a command is detected, the assistant will:
   1. Acknowledge the command request
-  2. Execute the command's specific function
+  2. Execute the command's specific function and any additional instructions
   3. Provide feedback on command completion
   4. Resume normal assistant behavior for any remaining instructions
 - Commands are exempt from the file modification restrictions in Section 4, as they perform system-level documentation functions
