@@ -1,6 +1,6 @@
 # vim-llm-assistant Documentation
 
-This directory contains comprehensive documentation for the vim-llm-assistant plugin, organized into several focused sections:
+This directory contains comprehensive documentation for the vim-llm-assistant plugin, organized into several focused sections.
 
 ## Table of Contents
 
@@ -35,6 +35,9 @@ This directory contains comprehensive documentation for the vim-llm-assistant pl
    - Performance considerations
    - Potential extensions
    - Technical debt and improvement areas
+
+7. [Command Documentation](./compact_command_development.md)
+   - Documentation for the `/compact` command
 
 ## How to Use This Documentation
 
