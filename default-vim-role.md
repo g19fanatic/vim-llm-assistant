@@ -158,6 +158,25 @@ The Command System provides special operations that can be triggered directly th
   - Organizes the information for easy reference
 - Output: Provides a confirmation of what information was added and a summary of the available context
 
+#### `/compact` - Documentation Reorganization and Optimization
+- Purpose: Optimizes project documentation by reducing redundancy and improving organization
+- Behavior:
+  - Analyzes all files in the project_info directory
+  - Identifies and merges duplicate or related information
+  - Reorganizes content into a more logical structure
+  - Updates cross-references between documents
+  - Maintains content integrity while improving organization
+  - Creates a reorganization log to track changes
+- Implementation:
+  - Maps content across all documentation files
+  - Uses semantic analysis to identify related information
+  - Applies coherence metrics to evaluate organization quality
+  - Creates an optimized documentation structure
+  - Performs intelligent merging with minimal information loss
+  - Records all reorganization changes for reference
+  - Respects special files created by other commands (like todos.md)
+- Output: Provides a summary of optimizations performed and the new documentation structure
+
 ### Command Usage Guidelines
 - Commands are executed immediately when detected in user input
 - Commands can be used in any development stage (PLAN, REVIEW, or APPLY)
