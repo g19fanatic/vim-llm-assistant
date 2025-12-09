@@ -158,7 +158,7 @@ The Command System provides special operations that can be triggered directly th
   - Organizes the information for easy reference
 - Output: Provides a confirmation of what information was added and a summary of the available context
 
-#### `/compact` - Documentation Reorganization and Optimization
+#### `/summarize` - Documentation Reorganization and Optimization
 - Purpose: Optimizes project documentation by reducing redundancy and improving organization
 - Behavior:
   - Analyzes all files in the project_info directory
@@ -181,6 +181,21 @@ The Command System provides special operations that can be triggered directly th
   - Performs content verification to confirm all information is preserved elsewhere before removal
   - Logs all file removals with content disposition information
 - Output: Provides a summary of optimizations performed and the new documentation structure
+
+#### `/compact` - Conversation Summarization for Handover
+- Purpose: Creates a condensed summary of the current conversation history and contexts for seamless transfer to sub-agents or new conversations
+- Behavior:
+  - Collects and analyzes the current LLM history, provided contexts, and open buffers
+  - Incorporates optional user-provided prompt as guidance for summarization focus (e.g., purpose like \"code review\" or \"debugging\")
+  - Extracts relevant code pieces, references, and contextual elements while removing redundancy
+  - Optimizes for LLM performance by keeping the summary concise yet comprehensive
+- Implementation:
+  - Scans the full conversation history for key decisions, insights, and code changes
+  - Parses active buffer contents and open buffers to include critical details
+  - Applies semantic filtering to prioritize actionable information over verbosity
+  - Uses the optional prompt to tailor the summary's emphasis (e.g., focus on technical specs if prompt indicates \"for implementation\")
+  - Validates that the output maintains fidelity to original content while enabling efficient continuation
+- Output: A formatted, self-contained summary block that can be directly used as input for another agent or conversation starter, with clear sections for history, context, and references
 
 ### Command Usage Guidelines
 - Commands are executed immediately when detected in user input
