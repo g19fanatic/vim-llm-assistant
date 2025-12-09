@@ -11,14 +11,26 @@ function! s:aichat_adapter.process(json_filename, prompt, model) abort
   endif
   
   " Generate a unique temporary filename for tool output
-  " This triggers a custom version of aichat to keep toolcalls in the chat
-  " response for CMD style calls
   let l:temp_file = tempname()
   
+  " Check for command augmentation function
+  let l:cmd_extra = ''
+  if exists('g:llm_adapter_cmd_extra') && has_key(g:llm_adapter_cmd_extra, 'aichat')
+    let l:cmd_extra_func = g:llm_adapter_cmd_extra.aichat
+    if exists('*'.l:cmd_extra_func)
+      " Call the function with parameters so it can make decisions
+      let l:cmd_extra = call(l:cmd_extra_func, [a:json_filename, a:prompt, l:model])
+      " Add space if not empty and doesn't end with space
+      if !empty(l:cmd_extra) && l:cmd_extra !~ '\s$'
+        let l:cmd_extra .= ' '
+      endif
+    endif
+  endif
+  
   if empty(a:prompt)
-    let l:cmd = 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' --file ' . shellescape(a:json_filename)
+    let l:cmd = l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' --file ' . shellescape(a:json_filename)
   else
-    let l:cmd = 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' --file ' . shellescape(a:json_filename) . ' -- ' . shellescape(a:prompt)
+    let l:cmd = l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' --file ' . shellescape(a:json_filename) . ' -- ' . shellescape(a:prompt)
   endif
 
   " Execute aichat and get the standard response
