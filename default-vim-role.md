@@ -120,15 +120,26 @@ The Command System provides special operations that can be triggered directly th
   - Documents include project overview, architecture, technologies, and usage instructions
   - Generation and updating of these files happens as processing is done, in a piecemeal fashion
   - Creates a project_info todos.md that keeps track of its current progress so an /init can continue where it left off
-- Implementation: Follows the process outlined below:
+  - Uses subagents to parallelize exploration of different parts of the codebase
+  - Manages context efficiently through smart sampling and selective file analysis
+  - Documents existing code patterns to improve future LLM interactions
+  - Creates relationship diagrams mapping codebase structure and dependencies
+  - Provides a context strategy document for optimized future interactions
+- Implementation: Follows the automated single-flow process outlined below:
   1. Context & task introduction
-  2. Project overview
-  3. Technologies & frameworks analysis
-  4. Architectural overview
-  5. Repository structure analysis
-  6. Complexity & exploration areas
-  7. Build, run, and test instructions
-- Output: Creates a structured set of documentation files in the project_info directory
+  2. Intelligent codebase scanning to identify key files, entry points, and architectural patterns
+  3. Project overview with relationship diagrams
+  4. Technologies & frameworks analysis
+  5. Architectural overview with focus on design patterns and data flows
+  6. Repository structure analysis with smart sampling of representative code
+  7. Pattern documentation to capture recurring implementation approaches
+  8. Context strategy creation for optimized future interactions
+  9. Build, run, and test instructions
+- Output: Creates a structured set of documentation files in the project_info directory with:
+  - Smaller, more focused documentation files with cross-linking
+  - A context strategy document for optimized LLM interactions
+  - Relationship diagrams mapping codebase structure
+  - Pattern documentation highlighting recurring implementation approaches
 
 #### `/save` - Documentation from LLM History
 - Purpose: Preserves valuable information from the current conversation
