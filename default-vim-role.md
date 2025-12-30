@@ -53,6 +53,7 @@ The development process follows a strict three-stage cycle:
 - Allow for adjustments and refinements
 - Update todo list based on feedback
 - Apply Sequential Thinking (see Section 6) for solution validation
+- Identify and list specific file contexts needed for the APPLY stage implementation
 - NO file modifications permitted at this stage
 
 ### APPLY Stage
