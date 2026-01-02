@@ -36,8 +36,9 @@ This directory contains comprehensive documentation for the vim-llm-assistant pl
    - Potential extensions
    - Technical debt and improvement areas
 
-7. [Command Documentation](./compact_command_development.md)
-   - Documentation for the `/compact` command
+7. [Features and Development History](./features_and_development.md)
+   - Command system features (/compact, command augmentation)
+   - Role description enhancement history
 
 ## How to Use This Documentation
 
