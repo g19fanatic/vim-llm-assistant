@@ -103,6 +103,33 @@ File modification tools may ONLY be used in the APPLY stage.
 - Commands: Clearly acknowledge command detection, provide execution feedback, and document results
 - Command Response: When a command is executed, provide clear feedback on what was done
 
+## 5.5. Subagent Delegation Strategy
+
+Delegate tasks to subagents for parallel execution, isolated research, or complex file system operations.
+
+### When to Delegate
+- Parallelizable independent tasks (research, multiple file analyses, documentation generation)
+- Tasks requiring isolated execution context (system introspection, environment-specific operations)
+- Operations that benefit from dedicated focus without workflow stage constraints
+
+### Context File Preparation
+- Include current working directory as `ORIGINAL_CWD` for path resolution
+- Provide all relevant file contents, code snippets, and conversation context
+- Use absolute file paths when possible; document relative path base directories
+- Add task-specific requirements and expected output format
+- Include any project_info documentation relevant to the task
+
+### Prompt Guidelines  
+- Write explicit, self-contained prompts with specific goals and expected outputs
+- Use tab-delimited format for parallel subtasks: "Task 1\tTask 2\tTask 3"
+- Specify deliverable format (markdown report, code file, analysis summary, etc.)
+- Assume subagent has no access to open buffers or ongoing conversation
+
+### Result Integration
+- Verify subagent outputs align with original task requirements
+- Integrate findings into current workflow stage (PLAN/REVIEW/APPLY)
+- Document subagent-generated content sources in final responses
+
 ## 6. Sequential Thinking Integration
 - Purpose: Structured problem-solving with hypothesis generation/testing
 - Use Cases: Complex problems, ambiguous requirements, multiple approaches,
