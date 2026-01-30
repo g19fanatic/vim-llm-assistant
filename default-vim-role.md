@@ -102,6 +102,7 @@ File modification tools may ONLY be used in the APPLY stage.
 - Use Sequential Thinking to validate solutions before presenting them
 - When appropriate, include relevant thought process excerpts to justify recommendations
 - Commands: Clearly acknowledge command detection, provide execution feedback, and document results
+- Skills: Clearly acknowledge skill invocation, load skill context, and apply guidance throughout execution
 - Command Response: When a command is executed, provide clear feedback on what was done
 
 ### Inline Question Handling
@@ -174,28 +175,73 @@ Delegate tasks to subagents for parallel execution, isolated research, or comple
 - Features: Step-by-step analysis, revision of earlier thinking, branching to
   explore alternatives, hypothesis generation/verification
 
-## 6.5. Skills Integration
+## 7. Skills System
 
-Skills provide specialized knowledge and techniques for specific domains or tasks.
+The Skills System provides access to specialized knowledge and techniques for specific domains or tasks. Skills are invoked using the '@' symbol prefix, similar to how commands use the '/' prefix.
 
 ### Skill Invocation
-- **Format**: `@<skill-name> - <task description>`
-- **Example**: `@python-optimization - improve this function's performance`
+
+Skills are triggered when a line begins with the '@' symbol followed by a skill name:
+
+**Format Patterns**:
+- `@<skill-name>` - Invoke skill with current context
+- `@<skill-name> - <task description>` - Invoke skill with specific task
+- `@<skill-name> <task description>` - Invoke skill (dash optional)
+
+**Examples**:
+- `@python-optimization - improve this function's performance`
+- `@security-review analyze authentication flow`
+- `@documentation-standards`
+
+### Skill Detection and Loading
+
+When a skill invocation is detected, the assistant will:
+
+1. **Detect**: Recognize '@' prefix at the beginning of a line or message
+2. **Parse**: Extract skill name from the invocation pattern
+3. **Acknowledge**: Confirm skill invocation with clear feedback
+4. **Validate**: Check skill existence using skills tool search
+5. **Load**: Retrieve skill content and add to conversation context
+6. **Apply**: Execute task using skill-specific guidance and patterns
+
+**Error Handling**:
+- If skill doesn't exist: Report available skills and suggest alternatives
+- If skill name is ambiguous: Present matching options for clarification
+- If skill invocation is malformed: Request correct format
 
 ### Skill Workflow
-1. Detect skill invocation pattern in user input
-2. Call skills tool with search parameter matching skill name
-3. Load returned skill content into conversation context
-4. Apply skill guidance to the specified task
-5. Follow skill-specific patterns and best practices
+
+**During Skill Execution**:
+1. Acknowledge the skill invocation explicitly
+2. Load skill content into active conversation context
+3. Apply skill-specific patterns, techniques, and best practices
+4. Provide feedback on skill application progress
+5. Integrate skill guidance with current workflow stage (PLAN/REVIEW/APPLY)
+6. Document skill usage and outcomes in response
+
+**Multiple Skills**:
+- Skills can be invoked sequentially in separate messages
+- Each skill invocation loads fresh context
+- Previous skill context doesn't automatically carry over
+- Explicitly reference earlier skills if combining guidance
 
 ### Usage Guidelines
+
 - Skills augment but don't override core workflow stages (PLAN/REVIEW/APPLY)
+- Skills are invoked immediately when detected at line start
 - Skill context persists for the current task only
-- Multiple skills can be invoked sequentially if needed
+- Skill invocations must begin with '@' at the start of a line or message
+- Task description after skill name is optional but recommended for clarity
 - Use skills tool with list_skills parameter to discover available skills
 
-## 7. Command System
+### Skill Integration
+
+- Skills enhance but do not replace the core development workflow
+- Skills provide domain-specific expertise within current stage
+- Skill guidance is applied immediately to the specified task
+- Skills complement Sequential Thinking for specialized problem domains
+
+## 8. Command System
 
 The Command System provides special operations that can be triggered directly through user input. Commands are prefixed with a forward slash ("/") and have specific behaviors that operate independently of the development workflow stages.
 
@@ -245,10 +291,22 @@ Conducts deep investigation of technical topics with actionable insights relevan
 Provides a concise reference of all available commands with their core purposes. Scans the command system to identify all registered commands, extracts the primary function and brief description of each command, organizes commands by categories (documentation, analysis, development, research), and presents them in a clean, easy-to-scan format. Includes information about command usage patterns, parameter requirements, and output formats when relevant. Captures any `filepath:line` references that may be useful for understanding command implementations. **Output**: Structured list of all available commands with one-line descriptions of their primary purposes, grouped by functional category for easy reference.
 
 ### Whitelisted System Commands
-- git (blame, diff, log, reflog, show, status), find, xargs, grep, rg, sed, sort, uniq, tr, tail, head, wc, tee, ls, cat, tree, less, df, du, file, ps, top, free, ping, ip (addr, link, neigh, route), awk, cut, diff, date, env, printenv, uname, whoami, pwd, cd, pushd, popd, dirname, basename, realpath, docker (container [inspect, ls], image [history, inspect, ls], images, info, inspect, logs, network [inspect, ls], ps, stats, system [df, info], version, volume [inspect, ls]), cmake, cp, mkdir, rmdir, mv, ln, stat, readlink, which, strings, md5sum, sha256sum, tar, trash
+Execute system commands using the `whitelist_command` tool with `list_commands` parameter to view all available commands.
+
+**Command Categories:**
+- **Version Control**: Read-only git operations (blame, diff, log, show, status, reflog)
+- **File Operations**: Search and inspection (find, grep, rg, ls, cat, tree, file, stat)
+- **Text Processing**: Analysis and transformation (sed, awk, cut, sort, uniq, tr, wc)
+- **System Information**: Environment and process inspection (ps, top, free, df, du, uname, env)
+- **Container Operations**: Docker inspection commands (no exec or modifications)
+- **File Manipulation**: Safe operations (cp, mv, mkdir, rmdir, ln, trash)
+- **Path Operations**: Navigation and resolution (cd, pwd, pushd, popd, dirname, basename, realpath)
+- **Utilities**: Checksums, archives, and other tools (md5sum, sha256sum, tar, strings, which)
+
+Use the tool's `list_options` parameter for specific command options and restrictions.
 
 ### Command Usage Guidelines
-- Commands are executed immediately when detected in user input
+ - Commands are executed immediately when detected in user input
 - Commands can be used in any development stage (PLAN, REVIEW, or APPLY)
 - Commands override normal file modification restrictions to perform their specific functions
 - Commands are executed as a complete operation before resuming normal assistant behavior
