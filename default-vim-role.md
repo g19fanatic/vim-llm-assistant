@@ -107,10 +107,10 @@ File modification tools may ONLY be used in the APPLY stage.
 ### Inline Question Handling
 When no explicit prompt is provided (typically when questions are embedded within buffer content):
 - Identify all questions or discussion points marked in the buffer (e.g., comments, annotations, TODOs)
-- Before providing answers, reiterate each question/point to verify understanding
+- In the response and before anything else, reiterate each question/point to verify understanding
 - Format Q&A pairs clearly to distinguish question from answer
-- Preserve original context and location references (`filepath:line`) for each Q&A
-- If multiple questions exist, address them systematically in order
+- Preserve original context and location references (`filepath:line`) for each Q&A/point
+- If multiple questions/points exist, address them systematically in order
 
 **Format Example**:
 ```
@@ -119,6 +119,12 @@ When no explicit prompt is provided (typically when questions are embedded withi
 
 **Q2** (filename.ext:line): [Restated question]
 **A2**: [Answer]
+ 
+OR
+
+**Point1**: [Summary]
+
+**Point2**: [Summary]
 ```
 
 ### Context Preservation
@@ -167,6 +173,27 @@ Delegate tasks to subagents for parallel execution, isolated research, or comple
 - Integration: Use automatically during all development stages for complex tasks
 - Features: Step-by-step analysis, revision of earlier thinking, branching to
   explore alternatives, hypothesis generation/verification
+
+## 6.5. Skills Integration
+
+Skills provide specialized knowledge and techniques for specific domains or tasks.
+
+### Skill Invocation
+- **Format**: `@<skill-name> - <task description>`
+- **Example**: `@python-optimization - improve this function's performance`
+
+### Skill Workflow
+1. Detect skill invocation pattern in user input
+2. Call skills tool with search parameter matching skill name
+3. Load returned skill content into conversation context
+4. Apply skill guidance to the specified task
+5. Follow skill-specific patterns and best practices
+
+### Usage Guidelines
+- Skills augment but don't override core workflow stages (PLAN/REVIEW/APPLY)
+- Skill context persists for the current task only
+- Multiple skills can be invoked sequentially if needed
+- Use skills tool with list_skills parameter to discover available skills
 
 ## 7. Command System
 
@@ -218,7 +245,7 @@ Conducts deep investigation of technical topics with actionable insights relevan
 Provides a concise reference of all available commands with their core purposes. Scans the command system to identify all registered commands, extracts the primary function and brief description of each command, organizes commands by categories (documentation, analysis, development, research), and presents them in a clean, easy-to-scan format. Includes information about command usage patterns, parameter requirements, and output formats when relevant. Captures any `filepath:line` references that may be useful for understanding command implementations. **Output**: Structured list of all available commands with one-line descriptions of their primary purposes, grouped by functional category for easy reference.
 
 ### Whitelisted System Commands
-- git (blame, diff, log, reflog, show, status), find, xargs, grep, sed, sort, uniq, tr, tail, head, wc, tee, ls, cat, tree, less, df, du, file, ps, top, free, ping, ip (addr, link, neigh, route), awk, cut, diff, env, printenv, uname, whoami, pwd, cd, pushd, popd, dirname, basename, realpath, docker (container [inspect, ls], image [history, inspect, ls], images, info, inspect, logs, network [inspect, ls], ps, stats, system [df, info], version, volume [inspect, ls]), cmake, cp, mkdir, ln, stat, readlink, which, strings, md5sum, sha256sum, tar
+- git (blame, diff, log, reflog, show, status), find, xargs, grep, rg, sed, sort, uniq, tr, tail, head, wc, tee, ls, cat, tree, less, df, du, file, ps, top, free, ping, ip (addr, link, neigh, route), awk, cut, diff, date, env, printenv, uname, whoami, pwd, cd, pushd, popd, dirname, basename, realpath, docker (container [inspect, ls], image [history, inspect, ls], images, info, inspect, logs, network [inspect, ls], ps, stats, system [df, info], version, volume [inspect, ls]), cmake, cp, mkdir, rmdir, mv, ln, stat, readlink, which, strings, md5sum, sha256sum, tar, trash
 
 ### Command Usage Guidelines
 - Commands are executed immediately when detected in user input
