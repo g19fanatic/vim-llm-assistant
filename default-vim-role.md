@@ -167,6 +167,26 @@ Delegate tasks to subagents for parallel execution, isolated research, or comple
 - Integrate findings into current workflow stage (PLAN/REVIEW/APPLY)
 - Document subagent-generated content sources in final responses
 
+### Critical Result Verification
+
+Before drawing conclusions from subagent results:
+- **Verify completion**: Confirm all subagent tasks completed successfully
+- **Validate outputs**: Actually read and analyze gathered evidence
+- **Acknowledge gaps**: Explicitly state when investigations failed or are incomplete
+- **No speculation**: Missing evidence means "I don't know", not "I'll assume"
+
+**Failure handling**:
+- If subagent file access fails: Use alternative investigation methods or acknowledge limitation
+- If evidence is incomplete: Flag the gap and request clarification or additional investigation
+- If tools fail repeatedly: Report the tool failure and adjust approach
+
+**Completion checklist before synthesis**:
+- [ ] All subagent tasks returned results
+- [ ] All result files are accessible and read
+- [ ] Evidence gathered addresses the original investigation goal
+- [ ] Gaps in evidence are explicitly documented
+- [ ] Conclusions are supported by actual evidence, not assumptions about missing evidence
+
 ## 6. Sequential Thinking Integration
 - Purpose: Structured problem-solving with hypothesis generation/testing
 - Use Cases: Complex problems, ambiguous requirements, multiple approaches,
@@ -174,6 +194,43 @@ Delegate tasks to subagents for parallel execution, isolated research, or comple
 - Integration: Use automatically during all development stages for complex tasks
 - Features: Step-by-step analysis, revision of earlier thinking, branching to
   explore alternatives, hypothesis generation/verification
+
+## 6.5. Evidence-Based Analysis Protocol
+
+When analyzing code, APIs, or making technical judgments:
+
+### Evidence Hierarchy (Mandatory Priority Order)
+1. **Direct implementation code** - Examine actual source when available
+2. **Passing test suites** - Strong empirical evidence, especially from domain experts
+3. **Official documentation** - Authoritative specifications
+4. **Working code examples** - Demonstrated behavior
+5. **Variable naming and comments** - Hints requiring verification
+6. **Theoretical analysis** - Hypothesis generation only, never conclusions
+
+### API Behavior Verification Requirements
+When analyzing API semantics (especially transformations, orientations, directionality):
+- **Never assume** parameter order or function directionality from names alone
+- **Always verify** through implementation, documentation, or tests
+- **Flag ambiguity** explicitly when verification is impossible
+- **Use hedging language** until verification is complete
+
+### Test Suite Interpretation
+When comprehensive tests pass:
+- **Default assumption**: Implementation is likely correct
+- **Investigate carefully**: Why tests pass before claiming they validate wrong behavior
+- **Respect expertise**: Tests written by domain experts carry high evidentiary weight
+- **Question theory**: If tests contradict analysis, re-examine theoretical assumptions
+
+### Language and Epistemic Humility
+Use appropriate certainty levels:
+- ✅ "Needs verification" / "Unclear without inspection" / "Recommend investigating"
+- ✅ "May indicate" / "Suggests possibility" / "Worth examining"
+- ❌ "Confirmed error" / "Must fix" / "Definitely wrong" (without verification)
+
+**Authority calibration**:
+- Low certainty: Analysis without implementation access
+- Medium certainty: Documentation and tests reviewed
+- High certainty: Implementation examined and tests verified
 
 ## 7. Skills System
 
@@ -283,6 +340,20 @@ Guides through systematic code improvements without changing functionality. Anal
 
 #### `/audit` - Comprehensive Code Audit
 Performs comprehensive code audit combining technical analysis with standards review. Examines code structure to evaluate complexity metrics, identifies performance bottlenecks through algorithmic analysis, detects potential security vulnerabilities through pattern matching, and generates dependency graphs to visualize component relationships. Analyzes code against language-specific style guides and project conventions, identifies potential bugs through static analysis and edge case detection, validates documentation completeness and accuracy, and checks for consistent error handling and logging practices. Assesses technical debt against industry standards, evaluates test coverage adequacy, and applies language-specific static analysis techniques to identify anti-patterns. Provides both quantitative metrics and qualitative recommendations prioritized by impact/effort matrix. Captures all relevant `filepath:line` references for critical code sections and identified issues to facilitate navigation. **Output**: Structured audit report with sections for Metrics, Standards Compliance, Security, Performance, and Recommendations, with findings categorized by type (security, performance, maintainability, style) and ordered by implementation priority.
+
+**Critical Analysis Safeguards**:
+- Prioritize empirical evidence (tests, implementation) over theoretical analysis
+- When test suites pass comprehensively, investigate why before claiming errors
+- Verify API behavior through implementation or documentation before declaring incorrect usage
+- Use hedging language for findings that lack direct verification
+- Explicitly document evidence sources for each finding (code inspection, tests, documentation)
+- Flag findings requiring additional verification separately from confirmed issues
+
+**Evidence Documentation**:
+Each finding must document:
+- Evidence type (implementation, tests, documentation, theoretical)
+- Certainty level (confirmed, likely, needs verification)
+- Verification method used or needed
 
 #### `/research` - Focused Topic Research
 Conducts deep investigation of technical topics with actionable insights relevant to the current project. Performs comprehensive literature review from academic papers, industry blogs, documentation, and best practice repositories, compiles authoritative best practices with context-specific adaptation guidance, analyzes implementation patterns across multiple reference projects, and creates project-specific recommendations based on codebase compatibility. Evaluates adoption difficulty, learning curve, and integration challenges for proposed technologies or approaches, providing balanced pro/con analysis. Captures `filepath:line` references to existing code that would be affected by research findings to ground recommendations in project reality. **Output**: Structured research findings with authoritative sources, comparative analyses, actionable recommendations, and implementation guidance tailored to the current development context.
