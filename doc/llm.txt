@@ -21,6 +21,41 @@ responses in a dedicated buffer, and customize model selection.
     Process the current buffer and visible buffers with an LLM.
     If [prompt] is provided, it will be sent as a prompt to the LLM.
 
+:LLMFile {file} [file2 ...] [-- prompt]    *:LLMFile*
+    Process one or more files with an LLM, enabling multi-modal queries
+    (images, audio, documents, etc.). Files are attached to the LLM request
+    using the adapter's file attachment mechanism (e.g., aichat -f flag).
+    
+    Arguments:
+        {file}     - Path to file or directory to attach (supports tab-completion)
+        [file2...] - Additional files to attach (optional)
+        [--]       - Delimiter separating files from prompt (optional)
+        [prompt]   - Query text to send with the attached files (optional)
+    
+    The command validates each file path and provides confirmation feedback
+    before processing. Supports relative paths, absolute paths, wildcards,
+    and directories.
+    
+    Multi-modal support requires a vision-capable model (e.g., Claude 3,
+    GPT-4 Vision) when attaching images or other media files.
+    
+    Examples:
+        " Analyze a screenshot
+        :LLMFile screenshot.png -- What does this show?
+        
+        " Compare multiple files
+        :LLMFile data.csv chart.png -- Compare the data with visualization
+        
+        " Analyze directory structure
+        :LLMFile src/ -- Explain this codebase structure
+        
+        " Attach file without immediate prompt (uses buffer context)
+        :LLMFile diagram.png
+        :LLM Now analyze this diagram with the code context
+        
+        " Process multiple documents
+        :LLMFile report.pdf notes.txt -- Summarize these documents
+
 :SetLLMModel {model}                   *:SetLLMModel*
     Set the default LLM model to use. You can now take advantage of enhanced
     completion: when invoking this command (e.g. by typing :SetLLMModel and then
