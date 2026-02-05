@@ -186,12 +186,66 @@ function! llm#set_default_adapter(adapter) abort
   call llm#adapter#set_current(a:adapter)
 endfunction
 
+" Function to handle LLM queries with attached files
+function! llm#run_with_files(...) abort
+  " Arguments: file1, file2, ..., [--], [prompt]
+  " Parse arguments to separate files from optional prompt
+  
+  let l:files = []
+  let l:prompt = ''
+  let l:found_delimiter = 0
+  
+  " Iterate through all arguments
+  for l:arg in a:000
+    if l:arg == '--'
+      " Delimiter found - everything after is the prompt
+      let l:found_delimiter = 1
+      continue
+    endif
+    
+    if l:found_delimiter
+      " Build prompt from remaining arguments
+      if l:prompt == ''
+        let l:prompt = l:arg
+      else
+        let l:prompt .= ' ' . l:arg
+      endif
+    else
+      " Before delimiter - treat as file path
+      let l:expanded = expand(l:arg)
+      let l:fullpath = fnamemodify(l:expanded, ':p')
+      
+      " Validate file or directory exists
+      if filereadable(l:fullpath) || isdirectory(l:fullpath)
+        call add(l:files, l:fullpath)
+      else
+        echoerr "LLMFile: File not found or not readable: " . l:arg
+        return
+      endif
+    endif
+  endfor
+  
+  " Check if at least one file was provided
+  if empty(l:files)
+    echoerr "LLMFile: No valid files provided"
+    return
+  endif
+  
+  " Display confirmation of attached files
+  echo "LLMFile: Attaching " . len(l:files) . " file(s): " . join(l:files, ', ')
+  
+  " Call main LLM function with file list
+  call llm#run(l:prompt, 0, l:files)
+endfunction
+
 " Main LLM function that gathers context and processes input
 function! llm#run(...) abort
   " Optional prompt argument; if supplied, this is the extra user prompt.
   let l:prompt = (a:0 >= 1 ? a:1 : '')
   " Optional model argument; if supplied, this is a boolean to choose the model.
   let l:choose_model = (a:0 >= 2 ? a:2 : 0)
+  " Optional file list argument; if supplied, these are files to attach.
+  let l:file_list = (a:0 >= 3 ? a:3 : [])
   let l:model = ''
   if l:choose_model
     let l:models = llm#get_available_models()
@@ -252,6 +306,11 @@ function! llm#run(...) abort
   " Include the prompt if provided.
   if l:prompt != ''
     let l:data.prompt = l:prompt
+  endif
+  
+  " Include file arguments if provided
+  if !empty(l:file_list)
+    let l:data.file_arguments = l:file_list
   endif
 
   " Always add the scratch buffer's contents as llm_history if it exists

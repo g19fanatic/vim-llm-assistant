@@ -33,6 +33,7 @@ endfor
 
 " Define commands
 command! -nargs=? -complete=buffer LLM call llm#run(<q-args>)
+command! -nargs=+ -complete=file LLMFile call llm#run_with_files(<f-args>)
 command! -nargs=? -complete=customlist,llm#complete_models SetLLMModel call llm#set_default_model(<q-args>)
 command! -nargs=? -complete=customlist,llm#complete_adapters SetLLMAdapter call llm#set_default_adapter(<q-args>)
 

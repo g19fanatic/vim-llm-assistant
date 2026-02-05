@@ -27,10 +27,25 @@ function! s:aichat_adapter.process(json_filename, prompt, model) abort
     endif
   endif
   
+  " Check if the JSON contains file_arguments
+  let l:file_flags = ''
+  if filereadable(a:json_filename)
+    let l:json_lines = readfile(a:json_filename)
+    let l:json_data = json_decode(join(l:json_lines, "\n"))
+    
+    if has_key(l:json_data, 'file_arguments')
+      " Build -f flags for each file
+      for l:file in l:json_data.file_arguments
+        let l:file_flags .= '-f ' . shellescape(l:file) . ' '
+      endfor
+    endif
+  endif
+  
+  " Construct command with file flags before the main --file flag
   if empty(a:prompt)
-    let l:cmd = l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' --file ' . shellescape(a:json_filename)
+    let l:cmd = l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename)
   else
-    let l:cmd = l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' --file ' . shellescape(a:json_filename) . ' -- ' . shellescape(a:prompt)
+    let l:cmd = l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename) . ' -- ' . shellescape(a:prompt)
   endif
 
   " Execute aichat and get the standard response
