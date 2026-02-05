@@ -25,6 +25,11 @@ if !exists('g:llm_adapters')
   let g:llm_adapters = ['aichat']  " Default adapter
 endif
 
+" Enable async processing if supported
+if !exists('g:llm_use_async')
+  let g:llm_use_async = has('job') && has('timers')
+endif
+
 " Load all configured adapters
 for adapter in g:llm_adapters
   let adapter_path = 'autoload/llm/adapters/' . adapter . '.vim'

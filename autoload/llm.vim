@@ -166,6 +166,21 @@ function! llm#process(json_filename, prompt, model) abort
   return l:adapter.process(a:json_filename, a:prompt, a:model)
 endfunction
 
+" Async process with callback
+function! llm#process_async(json_filename, prompt, model, callback) abort
+  " Get the current adapter
+  let l:adapter = llm#adapter#get_current()
+  
+  " Check if async is enabled AND adapter supports it
+  if g:llm_use_async && has_key(l:adapter, 'process_async')
+    return l:adapter.process_async(a:json_filename, a:prompt, a:model, a:callback)
+  else
+    " Fallback to synchronous processing
+    let l:result = l:adapter.process(a:json_filename, a:prompt, a:model)
+    call a:callback(l:result)
+  endif
+endfunction
+
 " Function to get the list of available models from the current adapter
 function! llm#get_available_models() abort
   " Get the current adapter
@@ -238,7 +253,7 @@ function! llm#run_with_files(...) abort
   call llm#run(l:prompt, 0, l:files)
 endfunction
 
-" Main LLM function that gathers context and processes input
+" Main LLM function that gathers context and processes input (now async-capable)
 function! llm#run(...) abort
   " Optional prompt argument; if supplied, this is the extra user prompt.
   let l:prompt = (a:0 >= 1 ? a:1 : '')
@@ -326,37 +341,46 @@ function! llm#run(...) abort
   let l:tempfile = tempname()
   call writefile(split(l:json_data, "\n"), l:tempfile)
 
-  " Call the external LLM agent function using the temporary file and prompt.
-  let l:response = llm#process(l:tempfile, l:prompt, l:model)
+  " Define callback to handle async completion
+  function! OnLLMComplete(output) closure
+    " Open (or reuse) the scratch buffer and switch to it.
+    let l:scratch_buf = llm#open_scratch_buffer()
+    execute 'buffer ' . l:scratch_buf
 
-  " Open (or reuse) the scratch buffer and switch to it.
-  let l:scratch_buf = llm#open_scratch_buffer()
-  execute 'buffer ' . l:scratch_buf
+    " Append a header with the current timestamp.
+    let l:last_line = line('$')
+    call append(l:last_line, '==== ' . strftime("%c") . ' ====')
 
-  " Append a header with the current timestamp.
-  let l:last_line = line('$')
-  call append(l:last_line, '==== ' . strftime("%c") . ' ====')
+    " Immediately after the timestamp, append the prompt if provided.
+    if l:prompt != ''
+      call append(l:last_line + 1, 'Prompt: ' . l:prompt)
+      let l:last_line += 1
+    endif
 
-  " Immediately after the timestamp, append the prompt if provided.
-  if l:prompt != ''
-    call append(l:last_line + 1, 'Prompt: ' . l:prompt)
-    let l:last_line += 1
-  endif
+    " Append the LLM response line by line.
+    for l:line in split(a:output, "\n")
+      call append(l:last_line + 1, l:line)
+      let l:last_line += 1
+    endfor
 
-  " Append the LLM response line by line.
-  for l:line in split(l:response, "\n")
-    call append(l:last_line + 1, l:line)
-    let l:last_line += 1
-  endfor
+    " Append a blank line after the entry.
+    call append(l:last_line + 1, '')
 
-  " Append a blank line after the entry.
-  call append(l:last_line + 1, '')
-
-  " Scroll to the bottom of the scratch buffer.
-  execute 'normal! G'
- 
-  " Return focus to the previous window.
-  wincmd p
+    " Scroll to the bottom of the scratch buffer.
+    execute 'normal! G'
+   
+    " Return focus to the previous window.
+    wincmd p
+    
+    " Clean up temp file
+    call delete(l:tempfile)
+    
+    echom '[LLM] Complete!'
+  endfunction
+  
+  " Show initial status and start async processing
+  echom '[LLM] Request sent, processing...'
+  call llm#process_async(l:tempfile, l:prompt, l:model, function('OnLLMComplete'))
 endfunction
 
 " Ensure session directory exists
