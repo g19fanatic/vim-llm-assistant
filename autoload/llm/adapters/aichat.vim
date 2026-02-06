@@ -55,7 +55,7 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   call llm#debug('aichat.process_async: Parsed ' . (len(split(l:file_flags)) / 2) . ' file arguments')
   
   " Construct command as a list for job_start
-  let l:cmd_base = ['sh', '-c', l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename)]
+  let l:cmd_base = ['bash', '-c', l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename)]
   if !empty(a:prompt)
     let l:cmd_base[2] .= ' -- ' . shellescape(a:prompt)
   endif
@@ -135,9 +135,9 @@ function! s:aichat_adapter.process(json_filename, prompt, model) abort
   
   " Construct command with file flags before the main --file flag
   if empty(a:prompt)
-    let l:cmd = l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename)
+    let l:cmd = 'bash -c ' . shellescape(l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename))
   else
-    let l:cmd = l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename) . ' -- ' . shellescape(a:prompt)
+    let l:cmd = 'bash -c ' . shellescape(l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename) . ' -- ' . shellescape(a:prompt))
   endif
 
   " Execute aichat and get the standard response
