@@ -2,6 +2,11 @@
 
 let s:aichat_adapter = {}
 
+" Helper for async status updates
+function! s:show_status_message() abort
+  echom '[LLM] Processing...'
+endfunction
+
 " Async process with callback
 function! s:aichat_adapter.process_async(json_filename, prompt, model, callback) abort
   if empty(a:model)
@@ -48,7 +53,7 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   let l:output = []
   
   " Start status timer (before job callbacks to capture in closure)
-  let l:timer_id = timer_start(2000, {-> echom '[LLM] Processing...'}, {'repeat': -1})
+  let l:timer_id = timer_start(2000, function('s:show_status_message'), {'repeat': -1})
   
   " Job callbacks
   let l:job_opts = {
