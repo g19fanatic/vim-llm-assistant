@@ -70,6 +70,7 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   
   " Job callbacks
   let l:job_opts = {
+        \ 'in_io': 'null',
         \ 'out_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.out_cb: Received ' . len(msg) . ' chars')]},
         \ 'err_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.err_cb: ' . msg)]},
         \ 'exit_cb': {job, status -> s:on_job_complete(l:output, l:temp_file, l:timer_id, status, a:callback)},
