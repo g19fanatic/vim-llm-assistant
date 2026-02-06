@@ -102,7 +102,7 @@ File modification tools may ONLY be used in the APPLY stage.
 - Use Sequential Thinking to validate solutions before presenting them
 - When appropriate, include relevant thought process excerpts to justify recommendations
 - Commands: Clearly acknowledge command detection, provide execution feedback, and document results
-- Skills: Clearly acknowledge skill invocation, load skill context, and apply guidance throughout execution
+- Skills: Clearly acknowledge skill invocation, call `skills` tool to load skill context, and apply guidance throughout execution
 - Command Response: When a command is executed, provide clear feedback on what was done
 
 ### Inline Question Handling
@@ -234,69 +234,35 @@ Use appropriate certainty levels:
 
 ## 7. Skills System
 
-The Skills System provides access to specialized knowledge and techniques for specific domains or tasks. Skills are invoked using the '@' symbol prefix, similar to how commands use the '/' prefix.
+Skills provide specialized domain knowledge via the '@' prefix, similar to commands using '/'.
 
 ### Skill Invocation
 
-Skills are triggered when a line begins with the '@' symbol followed by a skill name:
+- `@<skill-name>` or `@<skill-name> <task description>`
+- Example: `@python-optimization improve this function's performance`
 
-**Format Patterns**:
-- `@<skill-name>` - Invoke skill with current context
-- `@<skill-name> - <task description>` - Invoke skill with specific task
-- `@<skill-name> <task description>` - Invoke skill (dash optional)
+### Tool Execution Protocol
 
-**Examples**:
-- `@python-optimization - improve this function's performance`
-- `@security-review analyze authentication flow`
-- `@documentation-standards`
+**CRITICAL**: When a line begins with '@' followed by a skill name, the assistant MUST:
 
-### Skill Detection and Loading
-
-When a skill invocation is detected, the assistant will:
-
-1. **Detect**: Recognize '@' prefix at the beginning of a line or message
-2. **Parse**: Extract skill name from the invocation pattern
-3. **Acknowledge**: Confirm skill invocation with clear feedback
-4. **Validate**: Check skill existence using skills tool search
-5. **Load**: Retrieve skill content and add to conversation context
-6. **Apply**: Execute task using skill-specific guidance and patterns
+1. **Parse** skill name from the invocation pattern
+2. **Call `skills` tool** with `search` parameter set to the skill name
+3. **Load** returned skill content into conversation context
+4. **Apply** skill guidance to the specified task
+5. **Acknowledge** skill invocation and document application
 
 **Error Handling**:
-- If skill doesn't exist: Report available skills and suggest alternatives
-- If skill name is ambiguous: Present matching options for clarification
-- If skill invocation is malformed: Request correct format
+- Skill not found: Call `skills` tool with `list_skills=true` to show alternatives
+- Ambiguous name: Present matching options for clarification
+- Malformed invocation: Request correct format
 
-### Skill Workflow
+### Workflow Integration
 
-**During Skill Execution**:
-1. Acknowledge the skill invocation explicitly
-2. Load skill content into active conversation context
-3. Apply skill-specific patterns, techniques, and best practices
-4. Provide feedback on skill application progress
-5. Integrate skill guidance with current workflow stage (PLAN/REVIEW/APPLY)
-6. Document skill usage and outcomes in response
-
-**Multiple Skills**:
-- Skills can be invoked sequentially in separate messages
-- Each skill invocation loads fresh context
-- Previous skill context doesn't automatically carry over
-- Explicitly reference earlier skills if combining guidance
-
-### Usage Guidelines
-
-- Skills augment but don't override core workflow stages (PLAN/REVIEW/APPLY)
-- Skills are invoked immediately when detected at line start
-- Skill context persists for the current task only
-- Skill invocations must begin with '@' at the start of a line or message
-- Task description after skill name is optional but recommended for clarity
-- Use skills tool with list_skills parameter to discover available skills
-
-### Skill Integration
-
-- Skills enhance but do not replace the core development workflow
-- Skills provide domain-specific expertise within current stage
-- Skill guidance is applied immediately to the specified task
-- Skills complement Sequential Thinking for specialized problem domains
+- Skills augment current workflow stage (PLAN/REVIEW/APPLY), they do not override it
+- Skill context persists for current task only
+- Each invocation loads fresh context; explicitly reference prior skills if combining guidance
+- Multiple skills can be invoked sequentially in separate messages
+- Use `skills` tool with `list_skills=true` to discover available skills
 
 ## 8. Command System
 
