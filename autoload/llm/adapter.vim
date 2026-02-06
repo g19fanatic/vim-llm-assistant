@@ -25,6 +25,14 @@ function! llm#adapter#get_current() abort
   return s:adapters[s:current_adapter]
 endfunction
 
+" Get the name of the current adapter
+function! llm#adapter#get_current_name() abort
+  if empty(s:current_adapter)
+    return 'none'
+  endif
+  return s:current_adapter
+endfunction
+
 " Set the current adapter
 function! llm#adapter#set_current(name) abort
   if !has_key(s:adapters, a:name)
