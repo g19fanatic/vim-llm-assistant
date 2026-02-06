@@ -352,10 +352,9 @@ function! llm#run(...) abort
   endif
 
   " Convert the data dictionary to JSON.
-    \ }
   let l:json_data = llm#encode(l:data)
   
-  call llm#debug('llm#run: JSON data size=' . len(l:json_data) . ' bytes, files=' . len(l:files))
+  call llm#debug('llm#run: JSON data size=' . len(l:json_data) . ' bytes, files=' . len(l:file_list))
   
   " Write the JSON data to a temporary file.
   let l:tempfile = tempname()
