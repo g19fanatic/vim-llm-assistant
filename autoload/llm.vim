@@ -1,3 +1,10 @@
+" Debug logging helper
+function! llm#debug(msg) abort
+  if exists('g:llm_debug') && g:llm_debug
+    echom '[LLM DEBUG ' . strftime('%H:%M:%S') . '] ' . a:msg
+  endif
+endfunction
+
 " Helper: Custom JSON encoding using Vim's built-in json_encode()
 function! llm#encode(obj) abort
   return json_encode(a:obj)
@@ -168,13 +175,21 @@ endfunction
 
 " Async process with callback
 function! llm#process_async(json_filename, prompt, model, callback) abort
+  call llm#debug('llm#process_async: ENTER (json=' . a:json_filename . ', prompt="' . a:prompt . '", model="' . a:model . '")')
+  
   " Get the current adapter
   let l:adapter = llm#adapter#get_current()
+  call llm#debug('llm#process_async: Adapter=' . llm#adapter#get_current_name())
   
   " Check if async is enabled AND adapter supports it
+  let l:has_async = has_key(l:adapter, 'process_async')
+  call llm#debug('llm#process_async: g:llm_use_async=' . g:llm_use_async . ', adapter.has_async=' . l:has_async)
+  
   if g:llm_use_async && has_key(l:adapter, 'process_async')
+    call llm#debug('llm#process_async: -> USING ASYNC PATH')
     return l:adapter.process_async(a:json_filename, a:prompt, a:model, a:callback)
   else
+    call llm#debug('llm#process_async: -> FALLBACK TO SYNC PATH')
     " Fallback to synchronous processing
     let l:result = l:adapter.process(a:json_filename, a:prompt, a:model)
     call a:callback(l:result)
@@ -255,6 +270,8 @@ endfunction
 
 " Main LLM function that gathers context and processes input (now async-capable)
 function! llm#run(...) abort
+  call llm#debug('llm#run: ENTER (args=' . a:0 . ')')
+  
   " Optional prompt argument; if supplied, this is the extra user prompt.
   let l:prompt = (a:0 >= 1 ? a:1 : '')
   " Optional model argument; if supplied, this is a boolean to choose the model.
@@ -335,18 +352,24 @@ function! llm#run(...) abort
   endif
 
   " Convert the data dictionary to JSON.
+    \ }
   let l:json_data = llm#encode(l:data)
-
+  
+  call llm#debug('llm#run: JSON data size=' . len(l:json_data) . ' bytes, files=' . len(l:files))
+  
   " Write the JSON data to a temporary file.
   let l:tempfile = tempname()
   call writefile(split(l:json_data, "\n"), l:tempfile)
+  
+  call llm#debug('llm#run: Created tempfile=' . l:tempfile)
 
   " Define callback to handle async completion
   function! OnLLMComplete(output) closure
+    call llm#debug('OnLLMComplete: ENTER (output length=' . len(a:output) . ' chars)')
+    
     " Open (or reuse) the scratch buffer and switch to it.
     let l:scratch_buf = llm#open_scratch_buffer()
     execute 'buffer ' . l:scratch_buf
-
     " Append a header with the current timestamp.
     let l:last_line = line('$')
     call append(l:last_line, '==== ' . strftime("%c") . ' ====')
@@ -371,15 +394,17 @@ function! llm#run(...) abort
    
     " Return focus to the previous window.
     wincmd p
-    
     " Clean up temp file
     call delete(l:tempfile)
     
+    call llm#debug('OnLLMComplete: EXIT (buffer operations complete)')
     echom '[LLM] Complete!'
   endfunction
   
+  
   " Show initial status and start async processing
   echom '[LLM] Request sent, processing...'
+  call llm#debug('llm#run: Calling process_async with model="' . l:model . '"')
   call llm#process_async(l:tempfile, l:prompt, l:model, function('OnLLMComplete'))
 endfunction
 
