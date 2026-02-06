@@ -3,7 +3,7 @@
 let s:aichat_adapter = {}
 
 " Helper for async status updates
-function! s:show_status_message() abort
+function! s:show_status_message(timer) abort
   echom '[LLM] Processing...'
 endfunction
 
