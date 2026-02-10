@@ -216,6 +216,143 @@ function! llm#set_default_adapter(adapter) abort
   call llm#adapter#set_current(a:adapter)
 endfunction
 
+" List all active LLM jobs
+function! llm#list_jobs() abort
+  " Get the current adapter
+  let l:adapter = llm#adapter#get_current()
+  
+  " Check if adapter supports job listing
+  if !has_key(l:adapter, 'list_jobs')
+    echo '[LLM] Current adapter does not support job listing'
+    return []
+  endif
+  
+  let l:jobs = l:adapter.list_jobs()
+  
+  if empty(l:jobs)
+    echo '[LLM] No active jobs'
+    return []
+  endif
+  
+  " Build display lines
+  let l:lines = ['[LLM] Active Jobs:', '']
+  for l:job in l:jobs
+    let l:elapsed_str = l:job.elapsed . 's'
+    call add(l:lines, printf('  %d: "%s" [%s] (%s elapsed, %s)', 
+          \ l:job.id, l:job.prompt, l:job.model, l:elapsed_str, l:job.status))
+  endfor
+  call add(l:lines, '')
+  call add(l:lines, 'Press q or <Esc> to close')
+  
+  " Use appropriate display method based on capabilities
+  if has('popupwin')
+    " Vim 8.2+ popup window
+    call s:show_jobs_popup(l:lines)
+  elseif has('nvim')
+    " Neovim floating window
+    call s:show_jobs_float(l:lines)
+  else
+    " Fallback to split window for older Vim
+    call s:show_jobs_split(l:lines)
+  endif
+  
+  return l:jobs
+endfunction
+
+" Show jobs in Vim popup window (Vim 8.2+)
+function! s:show_jobs_popup(lines) abort
+  call popup_create(a:lines, {
+        \ 'title': ' LLM Jobs ',
+        \ 'border': [],
+        \ 'padding': [0, 1, 0, 1],
+        \ 'close': 'button',
+        \ 'filter': {id, key -> key == 'q' || key == "\<Esc>" ? popup_close(id) : 0},
+        \ })
+endfunction
+
+" Show jobs in Neovim floating window
+function! s:show_jobs_float(lines) abort
+  " Create scratch buffer
+  let l:buf = nvim_create_buf(v:false, v:true)
+  call nvim_buf_set_lines(l:buf, 0, -1, v:true, a:lines)
+  
+  " Calculate window size
+  let l:width = max(map(copy(a:lines), 'len(v:val)')) + 2
+  let l:height = len(a:lines)
+  
+  " Center the window
+  let l:opts = {
+        \ 'relative': 'editor',
+        \ 'width': l:width,
+        \ 'height': l:height,
+        \ 'col': (&columns - l:width) / 2,
+        \ 'row': (&lines - l:height) / 2,
+        \ 'border': 'rounded',
+        \ 'style': 'minimal',
+        \ }
+  
+  let l:win = nvim_open_win(l:buf, v:true, l:opts)
+  
+  " Set buffer options
+  call nvim_buf_set_option(l:buf, 'modifiable', v:false)
+  call nvim_buf_set_option(l:buf, 'bufhidden', 'wipe')
+  
+  " Add keybindings to close
+  nnoremap <buffer> q :close<CR>
+  nnoremap <buffer> <Esc> :close<CR>
+endfunction
+
+" Show jobs in split window (fallback for older Vim)
+function! s:show_jobs_split(lines) abort
+  let l:bufname = '[LLM Jobs]'
+  let l:bufnr = bufnr(l:bufname)
+  
+  if l:bufnr == -1
+    " Create new buffer
+    execute 'botright 10split ' . l:bufname
+    setlocal buftype=nofile bufhidden=wipe noswapfile nowrap
+    setlocal nomodifiable
+    nnoremap <buffer> q :close<CR>
+    nnoremap <buffer> <Esc> :close<CR>
+  else
+    " Reuse existing buffer
+    let l:winid = bufwinid(l:bufnr)
+    if l:winid != -1
+      " Window is open, just switch to it
+      call win_gotoid(l:winid)
+    else
+      " Window is closed, open it again
+      execute 'botright 10split +buffer' . l:bufnr
+    endif
+  endif
+  
+  " Update buffer content
+  setlocal modifiable
+  silent %delete _
+  call setline(1, a:lines)
+  setlocal nomodifiable
+  
+  " Resize window to fit content
+  let l:desired_height = len(a:lines)
+  if l:desired_height < 10
+    execute 'resize ' . l:desired_height
+  endif
+endfunction
+
+" Stop a specific LLM job
+function! llm#stop_job(job_id) abort
+  " Get the current adapter
+  let l:adapter = llm#adapter#get_current()
+  
+  " Check if adapter supports job stopping
+  if !has_key(l:adapter, 'stop_job')
+    echom '[LLM] Current adapter does not support job stopping'
+    return 0
+  endif
+  
+  return l:adapter.stop_job(a:job_id)
+endfunction
+
 " Function to handle LLM queries with attached files
 function! llm#run_with_files(...) abort
   " Arguments: file1, file2, ..., [--], [prompt]
