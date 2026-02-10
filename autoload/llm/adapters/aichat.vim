@@ -14,7 +14,10 @@ function! s:show_status_message(timer) abort
   endif
   let s:timer_tick_count[a:timer] += 1
   call llm#debug('s:show_status_message: Timer tick #' . s:timer_tick_count[a:timer] . ' (timer_id=' . a:timer . ')')
-  echom '[LLM] Processing...'
+  let l:job_count = len(s:llm_jobs)
+  let l:job_suffix = l:job_count > 1 ? ' (' . l:job_count . ' jobs)' : ''
+  " Use echo instead of echom to avoid overwriting other messages
+  echo '[LLM] Processing...' . l:job_suffix
 endfunction
 
 " Generate unique job ID

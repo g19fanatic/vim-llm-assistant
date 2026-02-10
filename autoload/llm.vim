@@ -234,8 +234,13 @@ function! llm#list_jobs() abort
     return []
   endif
   
+  " Clear command line and prepare for display
+  redraw
+  
   " Display jobs in a formatted way
+  echohl Title
   echo '[LLM] Active Jobs:'
+  echohl None
   for l:job in l:jobs
     let l:elapsed_str = l:job.elapsed . 's'
     echo printf('  %d: "%s" [%s] (%s elapsed, status: %s)', 
