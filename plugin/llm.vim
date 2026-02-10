@@ -48,6 +48,10 @@ command! ClearLLMSnippets call llm#clear_snippet_buffer()
 command! ListLLMModels echo llm#get_available_models()
 command! ListLLMAdapters echo llm#adapter#list()
 
+" Job management commands
+command! -nargs=? StopLLMJob call llm#stop_job(<args>)
+command! ListLLMJobs call llm#list_jobs()
+
 " Define mappings (can be commented out if the user prefers to define their own)
 " nnoremap <leader>ll :LLM<CR>
 

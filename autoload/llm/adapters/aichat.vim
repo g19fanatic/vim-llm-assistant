@@ -2,6 +2,10 @@
 
 let s:aichat_adapter = {}
 
+" Job tracking dictionary: {job_id: {job: handle, timer_id: id, prompt: str, model: str, start_time: timestamp}}
+let s:llm_jobs = {}
+let s:next_job_id = 1
+
 " Helper for async status updates
 let s:timer_tick_count = {}
 function! s:show_status_message(timer) abort
@@ -13,9 +17,77 @@ function! s:show_status_message(timer) abort
   echom '[LLM] Processing...'
 endfunction
 
+" Generate unique job ID
+function! s:generate_job_id() abort
+  let l:job_id = s:next_job_id
+  let s:next_job_id += 1
+  return l:job_id
+endfunction
+
+" List all active jobs
+function! s:aichat_adapter.list_jobs() abort
+  if empty(s:llm_jobs)
+    return []
+  endif
+  
+  let l:jobs = []
+  for [l:job_id, l:job_info] in items(s:llm_jobs)
+    let l:elapsed = localtime() - l:job_info.start_time
+    let l:prompt_preview = len(l:job_info.prompt) > 50 ? l:job_info.prompt[:47] . '...' : l:job_info.prompt
+    call add(l:jobs, {
+          \ 'id': l:job_id,
+          \ 'prompt': l:prompt_preview,
+          \ 'model': l:job_info.model,
+          \ 'elapsed': l:elapsed,
+          \ 'status': job_status(l:job_info.job)
+          \ })
+  endfor
+  
+  return l:jobs
+endfunction
+
+" Stop a specific job
+function! s:aichat_adapter.stop_job(job_id) abort
+  let l:job_id_str = string(a:job_id)
+  
+  if !has_key(s:llm_jobs, l:job_id_str)
+    echom '[LLM] Job ' . a:job_id . ' not found'
+    return 0
+  endif
+  
+  let l:job_info = s:llm_jobs[l:job_id_str]
+  
+  " Check if job is still running
+  let l:status = job_status(l:job_info.job)
+  if l:status != 'run'
+    echom '[LLM] Job ' . a:job_id . ' is not running (status: ' . l:status . ')'
+    call remove(s:llm_jobs, l:job_id_str)
+    return 0
+  endif
+  
+  " Stop the timer
+  call timer_stop(l:job_info.timer_id)
+  if has_key(s:timer_tick_count, l:job_info.timer_id)
+    call remove(s:timer_tick_count, l:job_info.timer_id)
+  endif
+  
+  " Stop the job (send SIGTERM)
+  call job_stop(l:job_info.job, 'term')
+  
+  " Remove from tracking
+  call remove(s:llm_jobs, l:job_id_str)
+  
+  echom '[LLM] Job ' . a:job_id . ' stopped'
+  return 1
+endfunction
+
 " Async process with callback
 function! s:aichat_adapter.process_async(json_filename, prompt, model, callback) abort
   call llm#debug('aichat.process_async: ENTER')
+  
+  " Generate unique job ID
+  let l:job_id = s:generate_job_id()
+  
   if empty(a:model)
     let l:model = g:llm_default_model
   else
@@ -73,7 +145,7 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
         \ 'in_io': 'null',
         \ 'out_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.out_cb: Received ' . len(msg) . ' chars')]},
         \ 'err_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.err_cb: ' . msg)]},
-        \ 'exit_cb': {job, status -> s:on_job_complete(l:output, l:temp_file, l:timer_id, status, a:callback)},
+        \ 'exit_cb': {job, status -> s:on_job_complete(l:job_id, l:output, l:temp_file, l:timer_id, status, a:callback)},
         \ 'out_mode': 'nl',
         \ }
   
@@ -92,6 +164,19 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
     call a:callback("ERROR: Failed to start aichat process. Check that 'aichat' command is available.")
     return
   endif
+  
+  " Track the job
+  let s:llm_jobs[string(l:job_id)] = {
+        \ 'job': l:job,
+        \ 'timer_id': l:timer_id,
+        \ 'prompt': a:prompt,
+        \ 'model': l:model,
+        \ 'start_time': localtime()
+        \ }
+  
+  call llm#debug('aichat.process_async: Job tracked with ID=' . l:job_id)
+  echom '[LLM] Job ' . l:job_id . ' started'
+  
 endfunction
 
 " Process text with aichat
@@ -152,8 +237,11 @@ function! s:aichat_adapter.process(json_filename, prompt, model) abort
 endfunction
 
 " Helper function to handle job completion
-function! s:on_job_complete(output, temp_file, timer_id, status, callback) abort
-  call llm#debug('s:on_job_complete: ENTER (timer_id=' . a:timer_id . ', status=' . a:status . ', output_lines=' . len(a:output) . ')')
+function! s:on_job_complete(job_id, output, temp_file, timer_id, status, callback) abort
+  call llm#debug('s:on_job_complete: ENTER (job_id=' . a:job_id . ', timer_id=' . a:timer_id . ', status=' . a:status . ', output_lines=' . len(a:output) . ')')
+  
+  " Remove job from tracking
+  call remove(s:llm_jobs, string(a:job_id))
   
   " Stop the specific timer for this request
   call timer_stop(a:timer_id)

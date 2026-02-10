@@ -216,6 +216,49 @@ function! llm#set_default_adapter(adapter) abort
   call llm#adapter#set_current(a:adapter)
 endfunction
 
+" List all active LLM jobs
+function! llm#list_jobs() abort
+  " Get the current adapter
+  let l:adapter = llm#adapter#get_current()
+  
+  " Check if adapter supports job listing
+  if !has_key(l:adapter, 'list_jobs')
+    echo '[LLM] Current adapter does not support job listing'
+    return []
+  endif
+  
+  let l:jobs = l:adapter.list_jobs()
+  
+  if empty(l:jobs)
+    echo '[LLM] No active jobs'
+    return []
+  endif
+  
+  " Display jobs in a formatted way
+  echo '[LLM] Active Jobs:'
+  for l:job in l:jobs
+    let l:elapsed_str = l:job.elapsed . 's'
+    echo printf('  %d: "%s" [%s] (%s elapsed, status: %s)', 
+          \ l:job.id, l:job.prompt, l:job.model, l:elapsed_str, l:job.status)
+  endfor
+  
+  return l:jobs
+endfunction
+
+" Stop a specific LLM job
+function! llm#stop_job(job_id) abort
+  " Get the current adapter
+  let l:adapter = llm#adapter#get_current()
+  
+  " Check if adapter supports job stopping
+  if !has_key(l:adapter, 'stop_job')
+    echom '[LLM] Current adapter does not support job stopping'
+    return 0
+  endif
+  
+  return l:adapter.stop_job(a:job_id)
+endfunction
+
 " Function to handle LLM queries with attached files
 function! llm#run_with_files(...) abort
   " Arguments: file1, file2, ..., [--], [prompt]
