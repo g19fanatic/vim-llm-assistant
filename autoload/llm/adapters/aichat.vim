@@ -243,8 +243,10 @@ endfunction
 function! s:on_job_complete(job_id, output, temp_file, timer_id, status, callback) abort
   call llm#debug('s:on_job_complete: ENTER (job_id=' . a:job_id . ', timer_id=' . a:timer_id . ', status=' . a:status . ', output_lines=' . len(a:output) . ')')
   
-  " Remove job from tracking
-  call remove(s:llm_jobs, string(a:job_id))
+  " Remove job from tracking (only if it still exists)
+  if has_key(s:llm_jobs, string(a:job_id))
+    call remove(s:llm_jobs, string(a:job_id))
+  endif
   
   " Stop the specific timer for this request
   call timer_stop(a:timer_id)
