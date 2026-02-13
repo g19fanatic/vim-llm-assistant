@@ -354,43 +354,89 @@ function! llm#stop_job(job_id) abort
 endfunction
 
 " Function to handle LLM queries with attached files
-function! llm#run_with_files(...) abort
-  " Arguments: file1, file2, ..., [--], [prompt]
+function! llm#run_with_files(args) abort
+  " Arguments: single string containing: file1 file2 ... [--] [prompt]
   " Parse arguments to separate files from optional prompt
+  
+  " If called with no arguments, show usage
+  if a:args == ''
+    echoerr "LLMFile: Usage: LLMFile <file1> [file2 ...] [-- prompt]"
+    return
+  endif
   
   let l:files = []
   let l:prompt = ''
-  let l:found_delimiter = 0
   
-  " Iterate through all arguments
-  for l:arg in a:000
-    if l:arg == '--'
-      " Delimiter found - everything after is the prompt
-      let l:found_delimiter = 1
-      continue
+  " Split the string on '--' first to separate files from prompt
+  let l:parts = split(a:args, '\s\+--\s\+', 1)
+  
+  if len(l:parts) == 0
+    echoerr "LLMFile: No arguments provided"
+    return
+  endif
+  
+  " Parse file arguments (before --)
+  let l:file_args = l:parts[0]
+  
+  " Parse prompt (after --)
+  if len(l:parts) > 1
+    let l:prompt = trim(l:parts[1])
+    " Remove surrounding quotes if present
+    if l:prompt =~ '^\(".*"\|' . "'.*'" . '\)$'
+      let l:prompt = l:prompt[1:-2]
     endif
+  endif
+  
+  " Now parse file arguments - handle quoted paths and escaped spaces
+  let l:file_args = trim(l:file_args)
+  let l:current_arg = ''
+  let l:in_quotes = 0
+  let l:i = 0
+  
+  while l:i < len(l:file_args)
+    let l:char = l:file_args[l:i]
     
-    if l:found_delimiter
-      " Build prompt from remaining arguments
-      if l:prompt == ''
-        let l:prompt = l:arg
-      else
-        let l:prompt .= ' ' . l:arg
+    if l:char == '"' || l:char == "'"
+      let l:in_quotes = !l:in_quotes
+    elseif l:char == ' ' && !l:in_quotes
+      " Space outside quotes - end of current argument
+      if l:current_arg != ''
+        let l:expanded = expand(l:current_arg)
+        let l:fullpath = fnamemodify(l:expanded, ':p')
+        
+        if filereadable(l:fullpath) || isdirectory(l:fullpath)
+          call add(l:files, l:fullpath)
+        else
+          echoerr "LLMFile: File not found or not readable: " . l:current_arg
+          return
+        endif
+        let l:current_arg = ''
       endif
     else
-      " Before delimiter - treat as file path
-      let l:expanded = expand(l:arg)
-      let l:fullpath = fnamemodify(l:expanded, ':p')
-      
-      " Validate file or directory exists
-      if filereadable(l:fullpath) || isdirectory(l:fullpath)
-        call add(l:files, l:fullpath)
+      if l:char == '\' && l:i + 1 < len(l:file_args) && l:file_args[l:i + 1] == ' '
+        " Escaped space - skip backslash, add space
+        let l:i += 1
+        let l:current_arg .= ' '
       else
-        echoerr "LLMFile: File not found or not readable: " . l:arg
-        return
+        let l:current_arg .= l:char
       endif
     endif
-  endfor
+    
+    let l:i += 1
+  endwhile
+  
+  " Don't forget the last argument
+  if l:current_arg != ''
+    let l:expanded = expand(l:current_arg)
+    let l:fullpath = fnamemodify(l:expanded, ':p')
+    
+    if filereadable(l:fullpath) || isdirectory(l:fullpath)
+      call add(l:files, l:fullpath)
+    else
+      echoerr "LLMFile: File not found or not readable: " . l:current_arg
+      return
+    endif
+  endif
   
   " Check if at least one file was provided
   if empty(l:files)
@@ -399,7 +445,7 @@ function! llm#run_with_files(...) abort
   endif
   
   " Display confirmation of attached files
-  echo "LLMFile: Attaching " . len(l:files) . " file(s): " . join(l:files, ', ')
+  echo "LLMFile: Attaching " . len(l:files) . " file(s)"
   
   " Call main LLM function with file list
   call llm#run(l:prompt, 0, l:files)
