@@ -202,7 +202,7 @@ function! llm#process_async(json_filename, prompt, model, callback, ...) abort
   endif
 endfunction
 
-\" Get the log path for a running job (delegates to adapter)
+" Get the log path for a running job (delegates to adapter)
 function! llm#get_job_log_path(job_id) abort
   let l:adapter = llm#adapter#get_current()
   if !has_key(l:adapter, 'get_log_path')
@@ -211,7 +211,7 @@ function! llm#get_job_log_path(job_id) abort
   return l:adapter.get_log_path(a:job_id)
 endfunction
 
-\" Function to get the list of available models from the current adapter
+" Function to get the list of available models from the current adapter
 function! llm#get_available_models() abort
   " Get the current adapter
   let l:adapter = llm#adapter#get_current()

@@ -163,11 +163,11 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback,
 
   " Start status timer — use status_callback if provided, else generic fallback
   if !empty(l:StatusCb)
-    let l:status_timer_fn = {timer -> call(l:StatusCb, ['[LLM:log=' . l:log_path . '] Processing... ' . (localtime() - l:start_time) . 's elapsed'])}
+    let l:StatusTimerFn = {timer -> call(l:StatusCb, ['[LLM:log=' . l:log_path . '] Processing... ' . (localtime() - l:start_time) . 's elapsed'])}
   else
-    let l:status_timer_fn = function('s:show_status_message')
+    let l:StatusTimerFn = function('s:show_status_message')
   endif
-  let l:timer_id = timer_start(2000, l:status_timer_fn, {'repeat': -1})
+  let l:timer_id = timer_start(2000, l:StatusTimerFn, {'repeat': -1})
   call llm#debug('aichat.process_async: Started timer_id=' . l:timer_id)
   
   " Job callbacks
