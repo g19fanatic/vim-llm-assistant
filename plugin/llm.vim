@@ -30,6 +30,27 @@ if !exists('g:llm_use_async')
   let g:llm_use_async = has('job') && has('timers')
 endif
 
+" Optional: Custom status callback function name (string)
+" If set, this function will be called with status string updates during async processing.
+" The function receives a single string argument with the status message.
+"   Example:
+"     function! MyStatusFn(msg)
+"       let g:my_llm_status = a:msg
+"       redrawstatus
+"     endfunction
+"     let g:llm_status_callback = 'MyStatusFn'
+if !exists('g:llm_status_callback')
+  let g:llm_status_callback = ''
+endif
+
+" Enable per-job log file generation (default: 1)
+" When enabled, adapters that support per-job logging will auto-generate
+" a unique log file path per job, allowing status messages to reference it.
+" Set to 0 to disable.
+if !exists('g:llm_enable_job_logging')
+  let g:llm_enable_job_logging = 1
+endif
+
 " Load all configured adapters
 for adapter in g:llm_adapters
   let adapter_path = 'autoload/llm/adapters/' . adapter . '.vim'

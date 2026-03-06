@@ -50,6 +50,11 @@ endfunction
 " Each adapter must implement the following functions:
 "
 " process(json_filename, prompt, model): Process a request with the LLM
+" process_async(json_filename, prompt, model, callback [, status_callback]):
+"   Async process with callback. Optional status_callback(message) is called
+"   with status string updates during processing (timer ticks, streaming tokens).
 " get_available_models(): Return a list of available models
 " check_availability(): Check if the adapter is available/installed
 " get_name(): Return the name of the adapter
+" get_log_path(job_id): (optional) Return the log file path for the given job,
+"   or '' if not supported. Adapters that support per-job logging implement this.

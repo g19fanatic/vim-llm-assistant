@@ -174,29 +174,44 @@ function! llm#process(json_filename, prompt, model) abort
 endfunction
 
 " Async process with callback
-function! llm#process_async(json_filename, prompt, model, callback) abort
+function! llm#process_async(json_filename, prompt, model, callback, ...) abort
   call llm#debug('llm#process_async: ENTER (json=' . a:json_filename . ', prompt="' . a:prompt . '", model="' . a:model . '")')
   
   " Get the current adapter
   let l:adapter = llm#adapter#get_current()
   call llm#debug('llm#process_async: Adapter=' . llm#adapter#get_current_name())
   
+  " Optional status callback (5th arg)
+  let l:status_callback = a:0 >= 1 ? a:1 : ''
+
   " Check if async is enabled AND adapter supports it
   let l:has_async = has_key(l:adapter, 'process_async')
   call llm#debug('llm#process_async: g:llm_use_async=' . g:llm_use_async . ', adapter.has_async=' . l:has_async)
   
   if g:llm_use_async && has_key(l:adapter, 'process_async')
     call llm#debug('llm#process_async: -> USING ASYNC PATH')
-    return l:adapter.process_async(a:json_filename, a:prompt, a:model, a:callback)
+    return l:adapter.process_async(a:json_filename, a:prompt, a:model, a:callback, l:status_callback)
   else
     call llm#debug('llm#process_async: -> FALLBACK TO SYNC PATH')
     " Fallback to synchronous processing
+    if !empty(l:status_callback)
+      call call(l:status_callback, ['[LLM] Processing (sync)...'])
+    endif
     let l:result = l:adapter.process(a:json_filename, a:prompt, a:model)
     call a:callback(l:result)
   endif
 endfunction
 
-" Function to get the list of available models from the current adapter
+\" Get the log path for a running job (delegates to adapter)
+function! llm#get_job_log_path(job_id) abort
+  let l:adapter = llm#adapter#get_current()
+  if !has_key(l:adapter, 'get_log_path')
+    return ''
+  endif
+  return l:adapter.get_log_path(a:job_id)
+endfunction
+
+\" Function to get the list of available models from the current adapter
 function! llm#get_available_models() abort
   " Get the current adapter
   let l:adapter = llm#adapter#get_current()
@@ -584,10 +599,20 @@ function! llm#run(...) abort
   endfunction
   
   
+  " Default status display — echoes adapter status messages to the command line
+  function! OnLLMStatus(msg) closure
+    echo a:msg
+  endfunction
+
+  " Use global status callback if configured, otherwise use default
+  let l:StatusFn = exists('g:llm_status_callback') && !empty(g:llm_status_callback)
+        \ ? function(g:llm_status_callback)
+        \ : function('OnLLMStatus')
+
   " Show initial status and start async processing
   echom '[LLM] Request sent, processing...'
   call llm#debug('llm#run: Calling process_async with model="' . l:model . '"')
-  call llm#process_async(l:tempfile, l:prompt, l:model, function('OnLLMComplete'))
+  call llm#process_async(l:tempfile, l:prompt, l:model, function('OnLLMComplete'), l:StatusFn)
 endfunction
 
 " Ensure session directory exists
