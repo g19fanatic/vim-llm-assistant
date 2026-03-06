@@ -101,7 +101,7 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback,
   let l:job_id = s:generate_job_id()
 
   " Optional status callback (5th arg)
-  let l:status_callback = a:0 >= 1 && !empty(a:1) ? a:1 : ''
+  let l:StatusCb = a:0 >= 1 && !empty(a:1) ? a:1 : ''
   
   if empty(a:model)
     let l:model = g:llm_default_model
@@ -162,8 +162,8 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback,
   let l:start_time = localtime()
 
   " Start status timer — use status_callback if provided, else generic fallback
-  if !empty(l:status_callback)
-    let l:status_timer_fn = {timer -> call(l:status_callback, ['[LLM:log=' . l:log_path . '] Processing... ' . (localtime() - l:start_time) . 's elapsed'])}
+  if !empty(l:StatusCb)
+    let l:status_timer_fn = {timer -> call(l:StatusCb, ['[LLM:log=' . l:log_path . '] Processing... ' . (localtime() - l:start_time) . 's elapsed'])}
   else
     let l:status_timer_fn = function('s:show_status_message')
   endif
@@ -173,7 +173,7 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback,
   " Job callbacks
   let l:job_opts = {
         \ 'in_io': 'null',
-        \ 'out_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.out_cb: Received ' . len(msg) . ' chars'), !empty(l:status_callback) ? call(l:status_callback, ['[LLM] <- ' . (len(msg) > 60 ? msg[:57] . '...' : msg)]) : 0]},
+        \ 'out_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.out_cb: Received ' . len(msg) . ' chars'), !empty(l:StatusCb) ? call(l:StatusCb, ['[LLM] <- ' . (len(msg) > 60 ? msg[:57] . '...' : msg)]) : 0]},
         \ 'err_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.err_cb: ' . msg)]},
         \ 'exit_cb': {job, status -> s:on_job_complete(l:job_id, l:output, l:temp_file, l:timer_id, status, a:callback)},
         \ 'out_mode': 'nl',

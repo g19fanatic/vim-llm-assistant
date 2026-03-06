@@ -182,7 +182,7 @@ function! llm#process_async(json_filename, prompt, model, callback, ...) abort
   call llm#debug('llm#process_async: Adapter=' . llm#adapter#get_current_name())
   
   " Optional status callback (5th arg)
-  let l:status_callback = a:0 >= 1 ? a:1 : ''
+  let l:StatusCb = a:0 >= 1 ? a:1 : ''
 
   " Check if async is enabled AND adapter supports it
   let l:has_async = has_key(l:adapter, 'process_async')
@@ -190,12 +190,12 @@ function! llm#process_async(json_filename, prompt, model, callback, ...) abort
   
   if g:llm_use_async && has_key(l:adapter, 'process_async')
     call llm#debug('llm#process_async: -> USING ASYNC PATH')
-    return l:adapter.process_async(a:json_filename, a:prompt, a:model, a:callback, l:status_callback)
+    return l:adapter.process_async(a:json_filename, a:prompt, a:model, a:callback, l:StatusCb)
   else
     call llm#debug('llm#process_async: -> FALLBACK TO SYNC PATH')
     " Fallback to synchronous processing
-    if !empty(l:status_callback)
-      call call(l:status_callback, ['[LLM] Processing (sync)...'])
+    if !empty(l:StatusCb)
+      call call(l:StatusCb, ['[LLM] Processing (sync)...'])
     endif
     let l:result = l:adapter.process(a:json_filename, a:prompt, a:model)
     call a:callback(l:result)
