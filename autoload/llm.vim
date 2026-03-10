@@ -505,7 +505,13 @@ function! llm#run(...) abort
 
   " Gather details for the active buffer.
   let l:active_filename = bufname(l:active_bufnr)
-  let l:active_contents = llm#get_buffer_content(l:active_bufnr, l:active_filename)
+  " If the active buffer IS the scratch buffer, don't duplicate its contents
+  " here — it is already sent as llm_history below.
+  if exists('g:llm_scratch_bufnr') && l:active_bufnr == g:llm_scratch_bufnr
+    let l:active_contents = ''
+  else
+    let l:active_contents = llm#get_buffer_content(l:active_bufnr, l:active_filename)
+  endif
 
   " Assemble the data dictionary.
   let l:data = {
