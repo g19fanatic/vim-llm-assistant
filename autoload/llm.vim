@@ -581,6 +581,7 @@ function! llm#run(...) abort
     
     call llm#debug('OnLLMComplete: EXIT (buffer operations complete)')
     echom '[LLM] Complete!'
+    call llm#maybe_notify({'prompt': l:prompt, 'model': l:model})
   endfunction
   
   
@@ -792,4 +793,12 @@ function! llm#load_session(filename) abort
   endif
   
   echo "LLM session loaded from " . l:filepath
+endfunction
+
+" Call user-defined notification hook if configured after LLM/LLMFile completes.
+" Context dict: {'prompt': '...', 'model': '...'}
+function! llm#maybe_notify(context) abort
+  if exists('g:Llm_notify_func') && !empty(g:Llm_notify_func)
+    call call(g:Llm_notify_func, [a:context])
+  endif
 endfunction

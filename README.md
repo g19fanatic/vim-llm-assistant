@@ -52,6 +52,42 @@ let g:llm_default_model = 'claude-3-7-sonnet-20250219'
 let g:llm_role = 'default-vim-role'
 ```
 
+## Notifications
+
+You can define a custom notification function in your `.vimrc` that fires automatically after any `:LLM` or `:LLMFile` command completes. Assign a `Funcref` to `g:llm_notify_func`; your function receives a dict with `prompt` and `model` keys.
+
+```vim
+" --- Linux (notify-send) ---
+function! MyLLMNotify(ctx)
+  call system('notify-send "LLM Complete" "' . shellescape(a:ctx.prompt[:40]) . '"')
+endfunction
+let g:llm_notify_func = function('MyLLMNotify')
+```
+
+```vim
+" --- macOS (osascript) ---
+function! MyLLMNotify(ctx)
+  call system("osascript -e 'display notification \"LLM response ready\" with title \"vim-llm\"'")
+endfunction
+let g:llm_notify_func = function('MyLLMNotify')
+```
+
+```vim
+" --- Terminal bell ---
+function! MyLLMNotify(ctx)
+  echon "\007"
+endfunction
+let g:llm_notify_func = function('MyLLMNotify')
+```
+
+```vim
+" --- Echo in Vim statusline ---
+function! MyLLMNotify(ctx)
+  echohl WarningMsg | echom '[LLM] Done: ' . a:ctx.prompt[:60] | echohl None
+endfunction
+let g:llm_notify_func = function('MyLLMNotify')
+```
+
 ## Context Structure
 
 When you invoke the LLM assistant, the plugin gathers contextual information from your Vim session and passes it to the LLM in a structured JSON format. Understanding this context structure helps you craft more effective prompts and potentially extend the plugin for custom workflows.

@@ -30,6 +30,12 @@ if !exists('g:llm_use_async')
   let g:llm_use_async = has('job') && has('timers')
 endif
 
+" Optional: user-defined notification hook, called after :LLM or :LLMFile completes.
+" Define a function in your vimrc and assign it as a Funcref:
+"   let g:Llm_notify_func = function('MyLLMNotify')
+" Your function receives one argument — a dict: {'prompt': '...', 'model': '...'}
+" No default is set; this feature is entirely opt-in.
+
 " Load all configured adapters
 for adapter in g:llm_adapters
   let adapter_path = 'autoload/llm/adapters/' . adapter . '.vim'
