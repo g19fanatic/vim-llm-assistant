@@ -587,13 +587,15 @@ function! llm#run(...) abort
     
     call llm#debug('OnLLMComplete: EXIT (buffer operations complete)')
     echom '[LLM] Complete!'
-    call llm#maybe_notify({'prompt': l:prompt, 'model': l:model})
+    call llm#maybe_notify({'prompt': l:prompt, 'model': l:model, 'tmux_window': l:tmux_window})
   endfunction
   
   
   " Show initial status and start async processing
   echom '[LLM] Request sent, processing...'
   call llm#debug('llm#run: Calling process_async with model="' . l:model . '"')
+  " Capture tmux window name at kick-off time so notify func can use it later
+  let l:tmux_window = !empty($TMUX) ? substitute(system('tmux display-message -p "#W"'), '\n\+$', '', '') : ''
   call llm#process_async(l:tempfile, l:prompt, l:model, function('OnLLMComplete'))
 endfunction
 
