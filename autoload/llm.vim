@@ -658,10 +658,15 @@ function! llm#save_session(filename) abort
   
   " CRITICAL-1 FIX: Save snippet buffer content if it exists
   " Use global variable for consistency with llm#get_buffer_content(), fallback to name lookup
+  " Defensively initialize snippets to [] to prevent any variable leakage
+  let l:session.snippets = []
   let l:snippet_bufnr = exists('g:llm_snippet_bufnr') && bufexists(g:llm_snippet_bufnr)
         \ ? g:llm_snippet_bufnr : bufnr('[LLM-Snippets]')
   if l:snippet_bufnr != -1
-    let l:session.snippets = getbufline(l:snippet_bufnr, 1, '$')
+    " Ensure we never save history content as snippets (guard against bufnr collision)
+    if l:snippet_bufnr != l:history_bufnr
+      let l:session.snippets = getbufline(l:snippet_bufnr, 1, '$')
+    endif
   else
     let l:session.snippets = []
   endif
@@ -744,6 +749,7 @@ function! llm#load_session(filename) abort
   " MINOR-2 FIX: Validate session structure
   if type(l:session) != v:t_dict
     echoerr "Invalid session file: expected JSON object"
+    call llm#debug("load_session: invalid JSON type - " . type(l:session))
     return
   endif
   
@@ -756,7 +762,10 @@ function! llm#load_session(filename) abort
     " Clear and populate the buffer (handles empty history correctly)
     call deletebufline(l:history_bufnr, 1, '$')
     if !empty(l:session.history)
+      call llm#debug("load_session: restoring " . len(l:session.history) . " history lines")
       call setbufline(l:history_bufnr, 1, l:session.history)
+    else
+      call llm#debug("load_session: history key present but empty - buffer cleared")
     endif
     call setbufvar(l:history_bufnr, '&modified', 0)
   endif
@@ -770,7 +779,10 @@ function! llm#load_session(filename) abort
     " Clear and populate the buffer (handles empty snippets correctly)
     call deletebufline(l:snippet_bufnr, 1, '$')
     if !empty(l:session.snippets)
+      call llm#debug("load_session: restoring " . len(l:session.snippets) . " snippet lines")
       call setbufline(l:snippet_bufnr, 1, l:session.snippets)
+    else
+      call llm#debug("load_session: snippets key present but empty - buffer cleared")
     endif
     call setbufvar(l:snippet_bufnr, '&modified', 0)
   endif
