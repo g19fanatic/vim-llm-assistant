@@ -131,7 +131,8 @@ function! llm#get_buffer_content(bufnr, filename) abort
     
     " First pass: collect all snippets for this file
     for l:snip in l:snip_lines
-      if l:snip =~ '^' . escape(a:filename, '\\') . ':\s'
+      " CRITICAL-2 FIX: Escape all regex special chars: \^$.*[]~ (Vim magic mode specials)
+      if l:snip =~# '^' . escape(a:filename, '\^$.*[]~') . ':\s'
         " Expected format: filename: start,end
         let l:parts = split(l:snip, ':\s\+')
         if len(l:parts) >= 2
@@ -382,7 +383,7 @@ function! llm#run_with_files(args) abort
   if len(l:parts) > 1
     let l:prompt = trim(l:parts[1])
     " Remove surrounding quotes if present
-    if l:prompt =~ '^\(".*"\|' . "'.*'" . '\)$'
+    if l:prompt =~ '^\(".*"\|' . "'.*" . '\)$'
       let l:prompt = l:prompt[1:-2]
     endif
   endif
@@ -645,16 +646,20 @@ function! llm#save_session(filename) abort
   " Build session dictionary
   let l:session = {}
   
-  " Save history buffer content if it exists
-  let l:history_bufnr = bufnr('[LLM-Scratch]')
+  " CRITICAL-1 FIX: Save history buffer content if it exists
+  " Use global variable for consistency with llm#run(), fallback to name lookup
+  let l:history_bufnr = exists('g:llm_scratch_bufnr') && bufexists(g:llm_scratch_bufnr)
+        \ ? g:llm_scratch_bufnr : bufnr('[LLM-Scratch]')
   if l:history_bufnr != -1
     let l:session.history = getbufline(l:history_bufnr, 1, '$')
   else
     let l:session.history = []
   endif
   
-  " Save snippet buffer content if it exists
-  let l:snippet_bufnr = bufnr('[LLM-Snippets]')
+  " CRITICAL-1 FIX: Save snippet buffer content if it exists
+  " Use global variable for consistency with llm#get_buffer_content(), fallback to name lookup
+  let l:snippet_bufnr = exists('g:llm_snippet_bufnr') && bufexists(g:llm_snippet_bufnr)
+        \ ? g:llm_snippet_bufnr : bufnr('[LLM-Snippets]')
   if l:snippet_bufnr != -1
     let l:session.snippets = getbufline(l:snippet_bufnr, 1, '$')
   else
@@ -736,27 +741,37 @@ function! llm#load_session(filename) abort
   let l:lines = readfile(l:filepath)
   let l:session = json_decode(join(l:lines, "\n"))
   
-  " Create or populate the history buffer
-  if has_key(l:session, 'history') && !empty(l:session.history)
+  " MINOR-2 FIX: Validate session structure
+  if type(l:session) != v:t_dict
+    echoerr "Invalid session file: expected JSON object"
+    return
+  endif
+  
+  " CRITICAL-3 FIX: Create or populate the history buffer (handles empty history correctly)
+  if has_key(l:session, 'history')
     let l:history_bufnr = llm#open_scratch_buffer()
     call setbufvar(l:history_bufnr, '&buftype', 'nofile')
     call setbufvar(l:history_bufnr, '&swapfile', 0)
     
-    " Clear and populate the buffer
+    " Clear and populate the buffer (handles empty history correctly)
     call deletebufline(l:history_bufnr, 1, '$')
-    call setbufline(l:history_bufnr, 1, l:session.history)
+    if !empty(l:session.history)
+      call setbufline(l:history_bufnr, 1, l:session.history)
+    endif
     call setbufvar(l:history_bufnr, '&modified', 0)
   endif
   
-  " Create or populate the snippet buffer
-  if has_key(l:session, 'snippets') && !empty(l:session.snippets)
+  " CRITICAL-3 FIX: Create or populate the snippet buffer (handles empty snippets correctly)
+  if has_key(l:session, 'snippets')
     let l:snippet_bufnr = llm#open_snippet_buffer()
     call setbufvar(l:snippet_bufnr, '&buftype', 'nofile')
     call setbufvar(l:snippet_bufnr, '&swapfile', 0)
     
-    " Clear and populate the buffer
+    " Clear and populate the buffer (handles empty snippets correctly)
     call deletebufline(l:snippet_bufnr, 1, '$')
-    call setbufline(l:snippet_bufnr, 1, l:session.snippets)
+    if !empty(l:session.snippets)
+      call setbufline(l:snippet_bufnr, 1, l:session.snippets)
+    endif
     call setbufvar(l:snippet_bufnr, '&modified', 0)
   endif
   
