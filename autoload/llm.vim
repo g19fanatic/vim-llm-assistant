@@ -753,38 +753,30 @@ function! llm#load_session(filename) abort
     return
   endif
   
-  " CRITICAL-3 FIX: Create or populate the history buffer (handles empty history correctly)
-  if has_key(l:session, 'history')
+  \" CRITICAL-3 FIX: Only open scratch buffer when history has content to restore
+  if has_key(l:session, 'history') && !empty(l:session.history)
     let l:history_bufnr = llm#open_scratch_buffer()
     call setbufvar(l:history_bufnr, '&buftype', 'nofile')
     call setbufvar(l:history_bufnr, '&swapfile', 0)
-    
-    " Clear and populate the buffer (handles empty history correctly)
     call deletebufline(l:history_bufnr, 1, '$')
-    if !empty(l:session.history)
-      call llm#debug("load_session: restoring " . len(l:session.history) . " history lines")
-      call setbufline(l:history_bufnr, 1, l:session.history)
-    else
-      call llm#debug("load_session: history key present but empty - buffer cleared")
-    endif
+    call llm#debug(\"load_session: restoring \" . len(l:session.history) . \" history lines\")
+    call setbufline(l:history_bufnr, 1, l:session.history)
     call setbufvar(l:history_bufnr, '&modified', 0)
+  elseif has_key(l:session, 'history')
+    call llm#debug(\"load_session: history key present but empty - skipping buffer creation\")
   endif
   
-  " CRITICAL-3 FIX: Create or populate the snippet buffer (handles empty snippets correctly)
-  if has_key(l:session, 'snippets')
+  \" Only open snippet buffer when snippets has content to restore
+  if has_key(l:session, 'snippets') && !empty(l:session.snippets)
     let l:snippet_bufnr = llm#open_snippet_buffer()
     call setbufvar(l:snippet_bufnr, '&buftype', 'nofile')
     call setbufvar(l:snippet_bufnr, '&swapfile', 0)
-    
-    " Clear and populate the buffer (handles empty snippets correctly)
     call deletebufline(l:snippet_bufnr, 1, '$')
-    if !empty(l:session.snippets)
-      call llm#debug("load_session: restoring " . len(l:session.snippets) . " snippet lines")
-      call setbufline(l:snippet_bufnr, 1, l:session.snippets)
-    else
-      call llm#debug("load_session: snippets key present but empty - buffer cleared")
-    endif
+    call llm#debug(\"load_session: restoring \" . len(l:session.snippets) . \" snippet lines\")
+    call setbufline(l:snippet_bufnr, 1, l:session.snippets)
     call setbufvar(l:snippet_bufnr, '&modified', 0)
+  elseif has_key(l:session, 'snippets')
+    call llm#debug(\"load_session: snippets key present but empty - skipping buffer creation\")
   endif
   
   " Add all visible files to the argument list
