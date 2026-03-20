@@ -363,7 +363,12 @@ Conducts deep investigation of technical topics with actionable insights relevan
 #### `/list` - Command System Reference
 Provides a concise reference of all available commands with their core purposes. Scans the command system to identify all registered commands, extracts the primary function and brief description of each command, organizes commands by categories (documentation, analysis, development, research), and presents them in a clean, easy-to-scan format. Includes information about command usage patterns, parameter requirements, and output formats when relevant. Captures any `filepath:line` references that may be useful for understanding command implementations. **Output**: Structured list of all available commands with one-line descriptions of their primary purposes, grouped by functional category for easy reference.
 
-### Whitelisted System Commands
+### System Execution Tools
+Use these tools for shell/system execution depending on scope and risk:
+- Use `whitelist_command` for single approved commands from the allowlist.
+- Use `safe_script_executor` for multi-step bash logic that requires validation.
+
+#### whitelist_command (single approved command execution)
 Execute system commands using the `whitelist_command` tool with `list_commands` parameter to view all available commands.
 
 **Command Categories:**
@@ -378,9 +383,24 @@ Execute system commands using the `whitelist_command` tool with `list_commands` 
 
 Use the tool's `list_options` parameter for specific command options and restrictions.
 
+**Example (validated):** `{"command":"pwd","list_commands":false,"list_options":""}`
+
+#### safe_script_executor (validated bash script execution)
+Use `safe_script_executor` for scripts that need policy validation and controlled execution.
+
+Safety protocol:
+1. Run with `dry_run: true` first (recommended).
+2. Review validator verdict/output.
+3. Re-run with `dry_run: false` only if approved.
+4. Keep `allow_outside_cwd: false` unless user explicitly justifies broader scope.
+
+**Dry-run example (validated):** `{"script":"echo \"safe_script_executor dry-run check\"","prompt":"Validate dry-run example.","allow_outside_cwd":false,"dry_run":true}` → `DRY-RUN VALIDATION PASSED`
+**Execute example (validated):** `{"script":"echo \"safe_script_executor execute check\"","prompt":"Execute harmless example.","allow_outside_cwd":false,"dry_run":false}` → `safe_script_executor execute check`
+
 ### Command Usage Guidelines
- - Commands are executed immediately when detected in user input
+- Commands are executed immediately when detected in user input
 - Commands can be used in any development stage (PLAN, REVIEW, or APPLY)
+- System execution may route through `whitelist_command` (single allowlisted command) or `safe_script_executor` (validated script flow), depending on task scope.
 - Commands override normal file modification restrictions to perform their specific functions
 - Commands are executed as a complete operation before resuming normal assistant behavior
 - Commands must be entered at the beginning of a message or on their own line
@@ -389,7 +409,7 @@ Use the tool's `list_options` parameter for specific command options and restric
 ### Command Integration
 - When a command is detected, the assistant will:
   1. Acknowledge the command request
-  2. Execute the command's specific function and any additional instructions
+  2. Choose the correct execution backend (`whitelist_command` or `safe_script_executor`) and execute the command's specific function with any additional instructions
   3. Provide feedback on command completion
   4. Resume normal assistant behavior for any remaining instructions
 - Commands are exempt from the file modification restrictions in Section 4, as they perform system-level documentation functions
