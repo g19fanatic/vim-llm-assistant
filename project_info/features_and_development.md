@@ -4,6 +4,71 @@ This document consolidates feature-specific documentation and development histor
 
 ---
 
+## Notification System
+
+### Tmux Window Fix — Kick-Off-Time Capture (2026-03-13)
+
+**Problem**: `MyLLMNotify` (the `g:Llm_notify_func` callback in `.vimrc`) called `tmux display-message -p "#W"` to obtain the window name when showing the completion notification. Because `:LLM` processes requests asynchronously, this query ran at callback time — which could be seconds or minutes after invocation. If the user had switched to a different tmux window in the interim, the notification title showed the *current* window rather than the window where `:LLM` was run.
+
+**Root Cause**:
+- `llm#run()` starts an async job via `llm#process_async()`, capturing an `OnLLMComplete` closure
+- When the job finishes, `OnLLMComplete` calls `llm#maybe_notify({'prompt': ..., 'model': ...})`
+- `MyLLMNotify` then runs `tmux display-message` — but by now the user may be in a different window
+
+**Fix**: Capture the tmux window name synchronously at the moment `:LLM` (or `:LLMFile`) is invoked, store it in the `OnLLMComplete` closure, and pass it through the `maybe_notify` context dict so `MyLLMNotify` reads the pre-captured value instead of re-querying tmux.
+
+**Files Changed**:
+
+| File | Location | Change |
+|---|---|---|
+| `autoload/llm.vim` | line ~594 | Added `let l:tmux_window = !empty($TMUX) ? substitute(system('tmux display-message -p "#W"'), '\n\+$', '', '') : ''` before `process_async` call |
+| `autoload/llm.vim` | line 590 | Changed `llm#maybe_notify({'prompt': l:prompt, 'model': l:model})` → added `'tmux_window': l:tmux_window` key |
+| `/home/pdibiase/.vimrc` | `MyLLMNotify` function | Reads `get(a:ctx, 'tmux_window', '')` first; falls back to live `tmux display-message` query only if the key is absent or empty |
+
+**Code References**:
+- `autoload/llm.vim:590` — `maybe_notify` context dict (adds `tmux_window` key)
+- `autoload/llm.vim:594-598` — tmux window capture + `process_async` call
+- `/home/pdibiase/.vimrc` `MyLLMNotify` — notification callback reading ctx
+
+**Implementation Detail** — Closure Capture:
+```vim
+" In llm#run(), just before process_async:
+let l:tmux_window = !empty($TMUX) ? substitute(system('tmux display-message -p "#W"'), '\n\+$', '', '') : ''
+call llm#process_async(l:tempfile, l:prompt, l:model, function('OnLLMComplete'))
+
+" OnLLMComplete closure captures l:tmux_window from outer scope:
+call llm#maybe_notify({'prompt': l:prompt, 'model': l:model, 'tmux_window': l:tmux_window})
+```
+
+```vim
+" In .vimrc — MyLLMNotify with pre-captured window:
+function! MyLLMNotify(ctx) abort
+  let l:msg = shellescape(a:ctx.prompt[:40])
+  let l:title = 'LLM Complete'
+  if !empty($TMUX)
+    " Use the window name captured at kick-off time; fall back to live query if not present
+    let l:win_name = get(a:ctx, 'tmux_window', '')
+    if empty(l:win_name)
+      let l:win_name = substitute(system('tmux display-message -p "#W"'), '\n\+$', '', '')
+    endif
+    if !empty(l:win_name)
+      let l:title = 'LLM [' . l:win_name . ']'
+    endif
+  endif
+  call system('notify-send ' . shellescape(l:title) . ' ' . l:msg)
+endfunction
+```
+
+**Scope**: The fix covers both `:LLM` and `:LLMFile` commands — `llm#run_with_files()` (`autoload/llm.vim:357`) delegates directly to `llm#run()` at line 449, so the single tmux capture in `llm#run` handles both code paths.
+
+**Backward Compatibility**: The `get(a:ctx, 'tmux_window', '')` fallback in `MyLLMNotify` ensures correct behavior even if `maybe_notify` is called from any future path that doesn't include the `tmux_window` key — it silently falls back to the live tmux query.
+
+**Backups Created**:
+- `autoload/llm.vim.bak`
+- `/home/pdibiase/.vimrc.bak`
+
+---
+
 ## Command System Features
 
 ### `/compact` Command

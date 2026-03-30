@@ -37,6 +37,7 @@ This directory contains comprehensive documentation for the vim-llm-assistant pl
    - Technical debt and improvement areas
 
 7. [Features and Development History](./features_and_development.md)
+   - Notification system (tmux window fix)
    - Command system features (/compact, command augmentation)
    - Role description enhancement history
 

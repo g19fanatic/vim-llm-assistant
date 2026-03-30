@@ -136,3 +136,69 @@ project_info/
 - Cross-reference integrity verified
 - Documentation style consistency maintained
 - Special files (like todos.md if present) were respected and not modified
+
+---
+
+# Documentation Summarization Log — Entry 2
+
+**Date**: 2026-03-13  
+**Command**: `/summarize`  
+**Objective**: Document new notification system fix from current session; assess redundancy in existing docs
+
+---
+
+## Redundancy Analysis
+
+**Findings**: No significant redundancy found in the existing 8-file structure.  
+The files continue to serve distinct, non-overlapping purposes.  
+No merges or deletions required.
+
+---
+
+## New Content Added
+
+### features_and_development.md — New Section Prepended
+
+**Section**: "Notification System → Tmux Window Fix — Kick-Off-Time Capture (2026-03-13)"
+
+**Reason**: The current session completed a full PLAN → REVIEW → APPLY cycle for a bug fix in the
+notification callback system. The fix was applied to `autoload/llm.vim` and `/home/pdibiase/.vimrc`
+and needed to be captured in the project docs.
+
+**Content Summary**:
+- Problem: `MyLLMNotify` queried tmux window at async completion time → wrong window if user switched
+- Fix: Capture `l:tmux_window` synchronously in `llm#run()` before `process_async`; pass via closure
+  to `llm#maybe_notify()` context dict; `MyLLMNotify` reads `a:ctx.tmux_window` first with live fallback
+- Scope: Covers both `:LLM` and `:LLMFile` (both route through `llm#run()`)
+- Files changed: `autoload/llm.vim:590`, `autoload/llm.vim:594-598`, `/home/pdibiase/.vimrc` `MyLLMNotify`
+
+---
+
+## Files Modified
+
+1. **features_and_development.md** — New "Notification System" section prepended (~65 lines)
+2. **README.md** — Updated entry 7 description to include "Notification system (tmux window fix)"
+3. **summarize_log.md** — This entry appended
+
+---
+
+## Files Unchanged
+
+1. **project_overview.md** — No changes needed
+2. **architecture.md** — No changes needed
+3. **repository_structure.md** — No changes needed
+4. **technologies.md** — No changes needed
+5. **complexity_areas.md** — No changes needed
+6. **build_run_test.md** — No changes needed
+
+---
+
+## Verification Checklist
+
+✅ Notification system fix documented with full implementation detail  
+✅ Code references captured (`autoload/llm.vim:590`, `autoload/llm.vim:594-598`, `.vimrc:MyLLMNotify`)  
+✅ Redundancy analysis performed — no merges or deletions needed  
+✅ All existing content preserved  
+✅ No file removals performed (no redundancy found)  
+✅ Documentation style consistent with existing entries  
+✅ README.md navigation updated
