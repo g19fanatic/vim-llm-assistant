@@ -30,6 +30,23 @@ if !exists('g:llm_use_async')
   let g:llm_use_async = has('job') && has('timers')
 endif
 
+" Session Status Logger settings
+if !exists('g:llm_session_log_enabled')
+  let g:llm_session_log_enabled = 1
+endif
+
+if !exists('g:llm_session_log_dir')
+  let g:llm_session_log_dir = ''  " empty = ~/.local/share/vim-llm-assistant/logs
+endif
+
+if !exists('g:llm_status_tui_height')
+  let g:llm_status_tui_height = 15
+endif
+
+if !exists('g:llm_status_tui_script')
+  let g:llm_status_tui_script = ''  " empty = auto-detect from plugin directory
+endif
+
 " Optional: user-defined notification hook, called after :LLM or :LLMFile completes.
 " Define a function in your vimrc and assign it as a Funcref:
 "   let g:Llm_notify_func = function('MyLLMNotify')
@@ -57,6 +74,12 @@ command! ListLLMAdapters echo llm#adapter#list()
 " Job management commands
 command! -nargs=? StopLLMJob call llm#stop_job(<args>)
 command! ListLLMJobs call llm#list_jobs()
+
+" Session status logger commands
+command! -nargs=? LLMStatus call llm#open_status_tui(<q-args>)
+command! LLMStatusClose call llm#close_status_tui()
+command! LLMLog execute 'edit ' . llm#session_log#log_dir()
+command! LLMLogClear call delete(llm#session_log#log_dir() . '/*.jsonl')
 
 " Define mappings (can be commented out if the user prefers to define their own)
 " nnoremap <leader>ll :LLM<CR>

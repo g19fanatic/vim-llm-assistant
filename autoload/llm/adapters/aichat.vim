@@ -6,6 +6,9 @@ let s:aichat_adapter = {}
 let s:llm_jobs = {}
 let s:next_job_id = 1
 
+" Session log tracking: {job_id_str: session_id}
+let s:session_id_map = {}
+
 " Helper for async status updates
 let s:timer_tick_count = {}
 function! s:show_status_message(timer) abort
@@ -18,6 +21,31 @@ function! s:show_status_message(timer) abort
   let l:job_suffix = l:job_count > 1 ? ' (' . l:job_count . ' jobs)' : ''
   " Use echo instead of echom to avoid overwriting other messages
   echo '[LLM] Processing...' . l:job_suffix
+endfunction
+
+" Parse a single output line for ralph/subagent markers
+function! s:parse_stream_line(job_id_str, msg) abort
+  if !has_key(s:session_id_map, a:job_id_str)
+    return
+  endif
+  let l:sid = s:session_id_map[a:job_id_str]
+  " Ralph loop markers (emoji-prefixed)
+  if a:msg =~# '🚀'
+    call llm#session_log#stream_event(l:sid, 'ralph_start', a:msg)
+  elseif a:msg =~# '🔄'
+    call llm#session_log#stream_event(l:sid, 'ralph_iteration', a:msg)
+  elseif a:msg =~# '🎉'
+    call llm#session_log#stream_event(l:sid, 'ralph_complete', a:msg)
+  elseif a:msg =~# '⚠️'
+    call llm#session_log#stream_event(l:sid, 'ralph_warning', a:msg)
+  elseif a:msg =~# '🛑'
+    call llm#session_log#stream_event(l:sid, 'ralph_error', a:msg)
+  " Subagent markers ([HH:MM:SS] Running/Completed)
+  elseif a:msg =~# '^\[.\{8}\] Running'
+    call llm#session_log#stream_event(l:sid, 'subagent_start', a:msg)
+  elseif a:msg =~# '^\[.\{8}\] Completed'
+    call llm#session_log#stream_event(l:sid, 'subagent_end', a:msg)
+  endif
 endfunction
 
 " Generate unique job ID
@@ -129,6 +157,12 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   
   call llm#debug('aichat.process_async: Parsed ' . (len(split(l:file_flags)) / 2) . ' file arguments')
   
+  " --- Session logging: generate session ID and emit start event ---
+  let l:session_id = llm#session_log#new_session_id()
+  let s:session_id_map[string(l:job_id)] = l:session_id
+  call llm#session_log#start(l:session_id, a:prompt, l:model)
+  " ----------------------------------------------------------------
+
   " Construct command as a list for job_start
   let l:cmd_base = ['bash', '-c', l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename)]
   if !empty(a:prompt)
@@ -146,9 +180,9 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   " Job callbacks
   let l:job_opts = {
         \ 'in_io': 'null',
-        \ 'out_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.out_cb: Received ' . len(msg) . ' chars')]},
+        \ 'out_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.out_cb: Received ' . len(msg) . ' chars'), s:parse_stream_line(string(l:job_id), msg)]},
         \ 'err_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.err_cb: ' . msg)]},
-        \ 'exit_cb': {job, status -> s:on_job_complete(l:job_id, l:output, l:temp_file, l:timer_id, status, a:callback)},
+        \ 'exit_cb': {job, status -> s:on_job_complete(l:job_id, l:output, l:temp_file, l:timer_id, status, a:callback, l:session_id)},
         \ 'out_mode': 'nl',
         \ }
   
@@ -240,7 +274,7 @@ function! s:aichat_adapter.process(json_filename, prompt, model) abort
 endfunction
 
 " Helper function to handle job completion
-function! s:on_job_complete(job_id, output, temp_file, timer_id, status, callback) abort
+function! s:on_job_complete(job_id, output, temp_file, timer_id, status, callback, session_id) abort
   call llm#debug('s:on_job_complete: ENTER (job_id=' . a:job_id . ', timer_id=' . a:timer_id . ', status=' . a:status . ', output_lines=' . len(a:output) . ')')
   
   " Remove job from tracking (only if it still exists)
@@ -261,6 +295,14 @@ function! s:on_job_complete(job_id, output, temp_file, timer_id, status, callbac
   " Clean up temp file
   call delete(a:temp_file)
   
+  " --- Session logging: emit end event and parse aichat log ---
+  if has_key(s:session_id_map, string(a:job_id))
+    call remove(s:session_id_map, string(a:job_id))
+  endif
+  call llm#session_log#end(a:session_id, a:status)
+  call llm#session_log#parse_aichat_log(a:session_id)
+  " ------------------------------------------------------------
+
   " Handle exit status
   let l:result = join(a:output, "\n")
   if a:status != 0

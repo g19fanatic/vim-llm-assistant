@@ -829,3 +829,45 @@ function! llm#maybe_notify(context) abort
     call call(g:Llm_notify_func, [a:context])
   endif
 endfunction
+
+" Open the session status TUI in a bottom terminal split
+function! llm#open_status_tui(...) abort
+  " Optional argument: session_id to view a specific session
+  let l:session_id = (a:0 >= 1 ? a:1 : '')
+
+  " Find the TUI script
+  let l:script = get(g:, 'llm_status_tui_script', '')
+  if empty(l:script)
+    let l:script = fnamemodify(resolve(expand('<sfile>:p')), ':h:h') . '/scripts/llm_status.py'
+  endif
+  if !filereadable(l:script)
+    echoerr '[LLM] Status TUI script not found: ' . l:script
+    return
+  endif
+
+  let l:height = get(g:, 'llm_status_tui_height', 15)
+  let l:log_dir = llm#session_log#log_dir()
+
+  " Build command
+  let l:cmd = 'python3 ' . shellescape(l:script) . ' --log-dir ' . shellescape(l:log_dir) . ' --follow'
+  if !empty(l:session_id)
+    let l:cmd .= ' --session-id ' . shellescape(l:session_id)
+  endif
+
+  " Open in bottom split terminal
+  execute 'botright ' . l:height . 'split'
+  let l:buf = term_start(['bash', '-c', l:cmd], {
+        \ 'curwin': 1,
+        \ 'term_finish': 'close',
+        \ })
+  setlocal nobuflisted
+  file [LLM-Status]
+endfunction
+
+" Close the status TUI split
+function! llm#close_status_tui() abort
+  let l:winid = bufwinid('[LLM-Status]')
+  if l:winid != -1
+    call win_execute(l:winid, 'close')
+  endif
+endfunction
