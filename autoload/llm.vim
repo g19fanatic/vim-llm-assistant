@@ -838,7 +838,22 @@ function! llm#open_status_tui(...) abort
   " Find the TUI script
   let l:script = get(g:, 'llm_status_tui_script', '')
   if empty(l:script)
-    let l:script = fnamemodify(resolve(expand('<sfile>:p')), ':h:h') . '/scripts/llm_status.py'
+    " Keep installed package path context (avoid symlink dereference)
+    let l:plugin_root = fnamemodify(expand('<sfile>:p'), ':h:h')
+    let l:candidate = l:plugin_root . '/scripts/llm_status.py'
+
+    if filereadable(l:candidate)
+      let l:script = l:candidate
+    else
+      " Fallback: search runtimepath for first matching script
+      for l:rtp in split(&runtimepath, ',')
+        let l:rtp_candidate = l:rtp . '/scripts/llm_status.py'
+        if filereadable(l:rtp_candidate)
+          let l:script = l:rtp_candidate
+          break
+        endif
+      endfor
+    endif
   endif
   if !filereadable(l:script)
     echoerr '[LLM] Status TUI script not found: ' . l:script
