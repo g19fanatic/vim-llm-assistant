@@ -33,7 +33,19 @@ def format_event_line(event: dict) -> str:
     etype = event.get('event_type', 'unknown')
 
     if etype == 'tool_call':
-        return f"{ts} tool_call tool={event.get('tool_name', '')}"
+        tool = event.get('tool_name', '')
+        args = event.get('tool_args', {})
+        ralph_step = event.get('ralph_step', '')
+        args_preview = ''
+        if isinstance(args, dict) and args:
+            try:
+                args_preview = json.dumps(args, ensure_ascii=False)[:120]
+            except TypeError:
+                args_preview = str(args)[:120]
+        suffix = f" args={args_preview}" if args_preview else ''
+        if ralph_step:
+            suffix += f" ralph_step={ralph_step[:80]}"
+        return f"{ts} tool_call tool={tool}{suffix}"
     if etype == 'llm_turn_end':
         inp = event.get('input_tokens', 0)
         out = event.get('output_tokens', 0)
@@ -122,11 +134,25 @@ def build_tools_panel(events: list[dict]) -> Panel:
     tools = [e for e in events if e.get('event_type') == 'tool_call']
     table = Table(show_header=True, header_style="bold green")
     table.add_column("#", style="dim", width=4)
-    table.add_column("Tool Name")
+    table.add_column("Tool")
+    table.add_column("Args/State")
     for i, t in enumerate(tools[-20:], 1):  # last 20
-        table.add_row(str(i), t.get('tool_name', ''))
+        tool = t.get('tool_name', '')
+        args = t.get('tool_args', {})
+        ralph_step = t.get('ralph_step', '')
+        args_txt = ''
+        if isinstance(args, dict) and args:
+            try:
+                args_txt = json.dumps(args, ensure_ascii=False)[:80]
+            except TypeError:
+                args_txt = str(args)[:80]
+        if ralph_step:
+            if args_txt:
+                args_txt += ' '
+            args_txt += f"step:{ralph_step[:40]}"
+        table.add_row(str(i), tool, args_txt)
     if not tools:
-        table.add_row("-", "no tool calls yet")
+        table.add_row("-", "no tool calls yet", "")
     return Panel(table, title=f"Tool Calls ({len(tools)})", border_style="green")
 
 
