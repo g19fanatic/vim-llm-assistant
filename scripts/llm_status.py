@@ -14,7 +14,6 @@ Usage:
   python3 llm_status.py --session-id 20260331_151642-1 --follow
 """
 import argparse
-import glob
 import json
 import os
 import time
@@ -26,6 +25,37 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+
+
+def format_event_line(event: dict) -> str:
+    """Render one event as a compact CLI line."""
+    ts = event.get('ts', '??')
+    etype = event.get('event_type', 'unknown')
+
+    if etype == 'tool_call':
+        return f"{ts} tool_call tool={event.get('tool_name', '')}"
+    if etype == 'llm_turn_end':
+        inp = event.get('input_tokens', 0)
+        out = event.get('output_tokens', 0)
+        model = event.get('model', '')
+        return f"{ts} llm_turn_end model={model} input={inp} output={out}"
+    if etype == 'token_usage_summary':
+        tin = event.get('total_input_tokens', 0)
+        tout = event.get('total_output_tokens', 0)
+        ttot = event.get('total_tokens', 0)
+        turns = event.get('llm_turn_count', 0)
+        tools = event.get('tool_call_count', 0)
+        return f"{ts} token_usage_summary in={tin} out={tout} total={ttot} turns={turns} tools={tools}"
+    if etype == 'stream_event':
+        sub = event.get('sub_type', '')
+        detail = str(event.get('detail', '')).strip().replace('\n', ' ')
+        return f"{ts} stream_event sub_type={sub} detail={detail[:120]}"
+    if etype == 'session_start':
+        return f"{ts} session_start session={event.get('session_id', '')} model={event.get('model', '')}"
+    if etype == 'session_end':
+        return f"{ts} session_end exit={event.get('exit_status', '')}"
+
+    return f"{ts} {etype}"
 
 
 def find_latest_session(log_dir: Path) -> str | None:
@@ -150,16 +180,57 @@ def main():
     parser.add_argument('--log-dir', required=True, help='Directory containing JSONL session logs')
     parser.add_argument('--session-id', default='', help='Specific session ID to view')
     parser.add_argument('--follow', action='store_true', help='Continuously refresh')
+    parser.add_argument('--cli', action='store_true', help='CLI mode: print event lines to stdout instead of TUI')
     args = parser.parse_args()
 
     log_dir = Path(args.log_dir)
     session_id = args.session_id or find_latest_session(log_dir)
 
-    if not session_id:
+    if not session_id and not args.follow:
         print("No session logs found in", log_dir)
         return
 
     console = Console()
+
+    if args.cli:
+        last_session_id = None
+        last_count = 0
+
+        def sync_latest_session(current_session_id: str) -> str:
+            if args.session_id:
+                return current_session_id
+            latest = find_latest_session(log_dir)
+            return latest or current_session_id
+
+        try:
+            while True:
+                session_id = sync_latest_session(session_id)
+                if not session_id:
+                    if args.follow:
+                        time.sleep(0.5)
+                        continue
+                    print(f'No session logs found in {log_dir}')
+                    return
+
+                events = load_events(log_dir, session_id)
+
+                if session_id != last_session_id:
+                    print(f'--- session {session_id} ---')
+                    last_session_id = session_id
+                    last_count = 0
+
+                if len(events) > last_count:
+                    for event in events[last_count:]:
+                        print(format_event_line(event), flush=True)
+                    last_count = len(events)
+
+                if not args.follow:
+                    break
+
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            pass
+        return
 
     if args.follow:
         with Live(console=console, screen=False, refresh_per_second=2) as live:

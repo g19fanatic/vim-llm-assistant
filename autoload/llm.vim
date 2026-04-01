@@ -868,7 +868,7 @@ function! llm#open_status_tui(...) abort
   let l:log_dir = llm#session_log#log_dir()
 
   " Build command
-  let l:cmd = 'python3 ' . shellescape(l:script) . ' --log-dir ' . shellescape(l:log_dir) . ' --follow'
+  let l:cmd = 'python3 ' . shellescape(l:script) . ' --log-dir ' . shellescape(l:log_dir) . ' --cli --follow'
   if !empty(l:session_id)
     let l:cmd .= ' --session-id ' . shellescape(l:session_id)
   endif
