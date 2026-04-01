@@ -2,6 +2,54 @@
 " Provides real-time session instrumentation via JSONL log files
 
 let s:session_counter = 0
+let s:parser_jobs = {}
+
+" Resolve parse_aichat_log.py location without forcing symlink resolution.
+function! llm#session_log#parser_path() abort
+  let l:autoload_path = expand('<sfile>:p')
+  let l:plugin_root = fnamemodify(l:autoload_path, ':h:h:h')
+  let l:candidate = l:plugin_root . '/scripts/parse_aichat_log.py'
+  if filereadable(l:candidate)
+    return l:candidate
+  endif
+
+  " Fallback: scan runtimepath for scripts/parse_aichat_log.py
+  for l:rtp in split(&runtimepath, ',')
+    let l:rtp_candidate = l:rtp . '/scripts/parse_aichat_log.py'
+    if filereadable(l:rtp_candidate)
+      return l:rtp_candidate
+    endif
+  endfor
+
+  return ''
+endfunction
+
+" Per-session parser state path for incremental token/tool extraction.
+function! llm#session_log#parser_state_path(session_id) abort
+  return llm#session_log#log_dir() . '/' . a:session_id . '_parser_state.json'
+endfunction
+
+" Initialize parser state so a new session only parses fresh aichat log lines.
+function! llm#session_log#init_parser_state(session_id) abort
+  let l:state_path = llm#session_log#parser_state_path(a:session_id)
+  let l:aichat_log = llm#session_log#aichat_log_path()
+  let l:last_offset = 0
+  if !empty(l:aichat_log) && filereadable(l:aichat_log)
+    let l:last_offset = getfsize(l:aichat_log)
+    if l:last_offset < 0
+      let l:last_offset = 0
+    endif
+  endif
+  let l:state = {
+        \ 'last_offset': l:last_offset,
+        \ 'pending_fragment': '',
+        \ 'total_input_tokens': 0,
+        \ 'total_output_tokens': 0,
+        \ 'llm_turn_count': 0,
+        \ 'tool_call_count': 0,
+        \ }
+  call writefile([json_encode(l:state)], l:state_path)
+endfunction
 
 " Generate a unique session ID: <timestamp>-<counter>
 function! llm#session_log#new_session_id() abort
@@ -81,8 +129,12 @@ endfunction
 " Invoke the aichat log parser after job completion (async via job_start)
 " Appends token_usage and tool_call events to the JSONL log
 function! llm#session_log#parse_aichat_log(session_id) abort
-  let l:parser = fnamemodify(resolve(expand('<sfile>:p')), ':h:h:h') . '/scripts/parse_aichat_log.py'
-  if !filereadable(l:parser)
+  if has_key(s:parser_jobs, a:session_id) && job_status(s:parser_jobs[a:session_id]) ==# 'run'
+    return
+  endif
+
+  let l:parser = llm#session_log#parser_path()
+  if empty(l:parser)
     call llm#debug('session_log: parser not found at ' . l:parser)
     return
   endif
@@ -92,13 +144,19 @@ function! llm#session_log#parse_aichat_log(session_id) abort
     return
   endif
   let l:jsonl_path = llm#session_log#log_path(a:session_id)
+  let l:state_path = llm#session_log#parser_state_path(a:session_id)
   let l:cmd = ['python3', l:parser,
         \ '--aichat-log', l:aichat_log,
         \ '--session-id', a:session_id,
-        \ '--output', l:jsonl_path]
-  call job_start(l:cmd, {
+        \ '--output', l:jsonl_path,
+        \ '--state-file', l:state_path]
+  let l:job = job_start(l:cmd, {
         \ 'in_io': 'null',
         \ 'out_io': 'null',
         \ 'err_cb': {ch, msg -> llm#debug('session_log parser err: ' . msg)},
+        \ 'exit_cb': {job, status -> remove(s:parser_jobs, a:session_id)},
         \ })
+  if job_status(l:job) ==# 'run'
+    let s:parser_jobs[a:session_id] = l:job
+  endif
 endfunction

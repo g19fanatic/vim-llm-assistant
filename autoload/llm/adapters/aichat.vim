@@ -160,6 +160,7 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   " --- Session logging: generate session ID and emit start event ---
   let l:session_id = llm#session_log#new_session_id()
   let s:session_id_map[string(l:job_id)] = l:session_id
+  call llm#session_log#init_parser_state(l:session_id)
   call llm#session_log#start(l:session_id, a:prompt, l:model)
   " ----------------------------------------------------------------
 
@@ -180,8 +181,8 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   " Job callbacks
   let l:job_opts = {
         \ 'in_io': 'null',
-        \ 'out_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.out_cb: Received ' . len(msg) . ' chars'), s:parse_stream_line(string(l:job_id), msg)]},
-        \ 'err_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.err_cb: ' . msg)]},
+        \ 'out_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.out_cb: Received ' . len(msg) . ' chars'), s:parse_stream_line(string(l:job_id), msg), llm#session_log#parse_aichat_log(l:session_id)]},
+        \ 'err_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.err_cb: ' . msg), llm#session_log#parse_aichat_log(l:session_id)]},
         \ 'exit_cb': {job, status -> s:on_job_complete(l:job_id, l:output, l:temp_file, l:timer_id, status, a:callback, l:session_id)},
         \ 'out_mode': 'nl',
         \ }

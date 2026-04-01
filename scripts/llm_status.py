@@ -72,7 +72,7 @@ def build_session_panel(events: list[dict]) -> Panel:
 
 def build_token_panel(events: list[dict]) -> Panel:
     """Build Token Usage panel."""
-    summary = next((e for e in events if e.get('event_type') == 'token_usage_summary'), None)
+    summary = next((e for e in reversed(events) if e.get('event_type') == 'token_usage_summary'), None)
     turns = [e for e in events if e.get('event_type') == 'llm_turn_end']
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Metric", style="dim")
@@ -103,7 +103,12 @@ def build_tools_panel(events: list[dict]) -> Panel:
 def build_ralph_panel(events: list[dict]) -> Panel:
     """Build Ralph/Subagent panel."""
     stream = [e for e in events if e.get('event_type') == 'stream_event']
+    ralph_iterations = sum(1 for e in stream if e.get('sub_type') == 'ralph_iteration')
+    subagent_starts = sum(1 for e in stream if e.get('sub_type') == 'subagent_start')
+    subagent_ends = sum(1 for e in stream if e.get('sub_type') == 'subagent_end')
     text = Text()
+    text.append(f"Ralph iterations: {ralph_iterations}\n", style="bold")
+    text.append(f"Subagents: {subagent_starts} started / {subagent_ends} completed\n\n", style="bold")
     for s in stream[-15:]:  # last 15
         sub = s.get('sub_type', '')
         detail = s.get('detail', '')[:100]
@@ -160,6 +165,10 @@ def main():
         with Live(console=console, screen=False, refresh_per_second=2) as live:
             try:
                 while True:
+                    if not args.session_id:
+                        latest = find_latest_session(log_dir)
+                        if latest:
+                            session_id = latest
                     events = load_events(log_dir, session_id)
                     live.update(build_display(events))
                     time.sleep(0.5)
