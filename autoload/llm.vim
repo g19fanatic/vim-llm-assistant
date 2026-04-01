@@ -488,6 +488,7 @@ function! llm#run(...) abort
   "   a) the active buffer (stored separately)
   "   b) the scratch buffer (the llm_history, which is added separately)
   "   c) the snippet buffer
+  "   d) the status TUI buffer ([LLM-Status])
   let l:buffers = []
   for l:bufnr in l:buf_list
     if l:bufnr == l:active_bufnr
@@ -500,15 +501,18 @@ function! llm#run(...) abort
     if empty(l:filename)
       let l:filename = "[No Name]"
     endif
+    if l:filename ==# '[LLM-Status]'
+      continue
+    endif
     let l:contents = llm#get_buffer_content(l:bufnr, l:filename)
     call add(l:buffers, {'filename': l:filename, 'contents': l:contents})
   endfor
 
   " Gather details for the active buffer.
   let l:active_filename = bufname(l:active_bufnr)
-  " If the active buffer IS the scratch buffer, don't duplicate its contents
-  " here — it is already sent as llm_history below.
-  if exists('g:llm_scratch_bufnr') && l:active_bufnr == g:llm_scratch_bufnr
+  " If the active buffer IS the scratch/status buffer, don't include contents.
+  " Scratch history is already sent as llm_history; status is UI-only.
+  if (exists('g:llm_scratch_bufnr') && l:active_bufnr == g:llm_scratch_bufnr) || l:active_filename ==# '[LLM-Status]'
     let l:active_contents = ''
   else
     let l:active_contents = llm#get_buffer_content(l:active_bufnr, l:active_filename)
