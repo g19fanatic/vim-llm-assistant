@@ -340,18 +340,54 @@ function! s:show_jobs_split(lines) abort
   endif
 endfunction
 
-" Stop a specific LLM job
-function! llm#stop_job(job_id) abort
-  " Get the current adapter
+
+" Stop a specific LLM job (interactive selection when no arg)
+function! llm#stop_job(arg) abort
   let l:adapter = llm#adapter#get_current()
-  
-  " Check if adapter supports job stopping
+
   if !has_key(l:adapter, 'stop_job')
     echom '[LLM] Current adapter does not support job stopping'
     return 0
   endif
-  
-  return l:adapter.stop_job(a:job_id)
+
+  " If a job ID was provided, stop it directly
+  if !empty(a:arg)
+    return l:adapter.stop_job(str2nr(a:arg))
+  endif
+
+  " No argument — interactive selection
+  if !has_key(l:adapter, 'list_jobs')
+    echom '[LLM] Current adapter does not support job listing'
+    return 0
+  endif
+
+  let l:jobs = l:adapter.list_jobs()
+
+  if empty(l:jobs)
+    echom '[LLM] No active jobs'
+    return 0
+  endif
+
+  " Single job — stop it automatically
+  if len(l:jobs) == 1
+    echom '[LLM] Stopping only active job #' . l:jobs[0].id
+    return l:adapter.stop_job(l:jobs[0].id)
+  endif
+
+  " Multiple jobs — present inputlist() menu
+  let l:choices = ['Select job to stop:']
+  for l:i in range(len(l:jobs))
+    let l:j = l:jobs[l:i]
+    call add(l:choices, (l:i + 1) . ': [#' . l:j.id . '] "' . l:j.prompt . '" [' . l:j.model . '] (' . l:j.elapsed . 's)')
+  endfor
+
+  let l:pick = inputlist(l:choices)
+  if l:pick < 1 || l:pick > len(l:jobs)
+    echom '[LLM] Cancelled'
+    return 0
+  endif
+
+  return l:adapter.stop_job(l:jobs[l:pick - 1].id)
 endfunction
 
 " Function to handle LLM queries with attached files
