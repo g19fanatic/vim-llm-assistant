@@ -371,7 +371,7 @@ function! llm#stop_job(arg) abort
   " Single job — stop it automatically
   if len(l:jobs) == 1
     echom '[LLM] Stopping only active job #' . l:jobs[0].id
-    return l:adapter.stop_job(l:jobs[0].id)
+    return l:adapter.stop_job(str2nr(l:jobs[0].id))
   endif
 
   " Multiple jobs — present inputlist() menu
@@ -387,7 +387,7 @@ function! llm#stop_job(arg) abort
     return 0
   endif
 
-  return l:adapter.stop_job(l:jobs[l:pick - 1].id)
+  return l:adapter.stop_job(str2nr(l:jobs[l:pick - 1].id))
 endfunction
 
 " Function to handle LLM queries with attached files
