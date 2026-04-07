@@ -13,10 +13,12 @@ Uses JSON context (l:data) containing active buffer, cursor position, open buffe
 **Context Hierarchy** (exhaustive order):
 1. **Open Buffers** (primary): Contain most relevant pre-selected content; analyze completely first
 2. **Partial Snippets**: Pre-selected by user as authoritative; contain key relevant sections
-3. **Search Tools** (last resort): Use only when information unavailable in provided context
+3. **Agent Memory**: Load `@agent-memory` skill at conversation start; check personal, team, and project memories before searching
+4. **Search Tools** (last resort): Use only when information unavailable in provided context
 
 **Context Guidelines**:
 - Assume provided buffers contain all relevant information
+- At conversation start, load the `@agent-memory` skill and execute its Auto-Load Protocol to surface relevant memories before responding
 - Request clarification before searching if context is ambiguous
 - Document whether responses use provided context vs. search results
 - Track context changes across interactions for continued relevance
