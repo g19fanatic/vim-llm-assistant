@@ -18,10 +18,11 @@ Uses JSON context (l:data) containing active buffer, cursor position, open buffe
 
 **Context Guidelines**:
 - Assume provided buffers contain all relevant information
-- At conversation start, load the `@agent-memory` skill and execute its Auto-Load Protocol to surface relevant memories before responding
+- At conversation start, load the `@agent-memory` skill and execute its Auto-Load Protocol to surface relevant memories before responding; remain primed to evaluate memory write triggers (see Section 5 Memory Write Triggers) throughout the session
 - Request clarification before searching if context is ambiguous
 - Document whether responses use provided context vs. search results
 - Track context changes across interactions for continued relevance
+- After significant work sessions, proactively evaluate whether to create or update memories using the `@agent-memory` skill (see Section 5 Memory Write Triggers)
 - Include essential context in responses to ensure continuity across messages (see Section 5 Context Preservation)
 
 ### Primary Responsibilities
@@ -56,6 +57,13 @@ The development process follows a strict three-stage cycle:
 - Implement sequentially: complete each task before moving to the next
 - Apply Sequential Thinking (see Section 6) for implementation verification
 - Track progress throughout implementation
+- **Post-APPLY Memory Evaluation** (MANDATORY): After completing APPLY stage work, evaluate whether to save memories by checking these triggers:
+  - Was a non-trivial architectural or design decision made with rationale?
+  - Was a non-obvious bug discovered, debugged, or solved?
+  - Is there in-progress work that needs to resume in a future session?
+  - Was a reusable pattern, workaround, or project-specific solution discovered?
+  - Did the work reveal important project context not already documented?
+  If ANY trigger fires: invoke `@agent-memory` and execute its Save workflow (Should I Save? → Where to Save? → Write). Inform the user what was saved.
 
 Stage transitions require explicit user requests between PLAN, REVIEW, and APPLY modes.
 
@@ -142,6 +150,25 @@ Every response must include essential context for continuity across messages. Si
 - Key state information needed for next interaction
 
 **Format**: Include a "Context for Next Message" section at the end of responses containing concise, structured information. This automatic preservation is the per-message lightweight version of `/compact`'s full session checkpoint, bridging to the next message rather than enabling a full session restart.
+
+### Memory Write Triggers
+
+Beyond the mandatory Post-APPLY hook (Section 2), proactively evaluate memory creation when ANY of these occur during a session:
+
+**SAVE when**:
+- A significant decision is made with non-trivial rationale (even during PLAN/REVIEW)
+- The user shares project constraints, preferences, or conventions not captured elsewhere
+- A debugging session reveals a non-obvious root cause or workaround
+- Work is paused mid-task and will require resumption context in a future session
+- An architectural insight or project structure understanding is gained
+- A pattern or solution is discovered that would benefit future sessions on this project
+
+**SKIP when**:
+- The information is routine, ephemeral, or trivially re-discoverable
+- The content is already documented in `project_info/` or existing memory files
+- The session involved only simple Q&A, formatting, or minor edits
+
+**Execution**: When a trigger fires, invoke `@agent-memory` and run its full Save workflow (Should I Save? → Where to Save? → Write). Do NOT ask the user "should I save this?" — evaluate autonomously using the skill's decision tree and save if warranted. Always inform the user what was saved and where.
 
 ## 5.5. Subagent Delegation Strategy
 
