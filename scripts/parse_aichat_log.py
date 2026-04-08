@@ -21,6 +21,8 @@ RE_NON_STREAM_MARKER = re.compile(r"non-stream-data:\s*")
 RE_TOOL_CALL = re.compile(r"run_llm_function(?:\s+|:\s*|\()([A-Za-z0-9_.\-]+)")
 RE_TIMESTAMP = re.compile(r"^\[(\d{4}-\d{2}-\d{2}T[\d:.+-]+)\]")
 RE_TOOL_KV = re.compile(r"\btool(?:_name)?\s*[=:]\s*([A-Za-z0-9_.\-]+)")
+RE_CMD_NAME = re.compile(r"cmd_name:\s*([A-Za-z0-9_.\-]+)")
+RE_TOOL_OUTPUT = re.compile(r"Tool output:\s*(true|false)", re.IGNORECASE)
 
 
 DEFAULT_STATE = {
@@ -28,8 +30,10 @@ DEFAULT_STATE = {
     "pending_fragment": "",
     "total_input_tokens": 0,
     "total_output_tokens": 0,
+    "total_cache_read_tokens": 0,
     "llm_turn_count": 0,
     "tool_call_count": 0,
+    "last_executed_tool": "",
     "recent_line_hashes": [],
 }
 
@@ -49,28 +53,39 @@ def _find_first_json_object(text: str) -> dict[str, Any] | None:
     return obj if isinstance(obj, dict) else None
 
 
-def _extract_usage(data: dict[str, Any]) -> tuple[int, int]:
+def _extract_usage(data: dict[str, Any]) -> tuple[int, int, int]:
     usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
     inp = int(
         usage.get("input_tokens")
+        or usage.get("inputTokens")
         or usage.get("prompt_tokens")
         or usage.get("prompt_token_count")
         or 0
     )
     out = int(
         usage.get("output_tokens")
+        or usage.get("outputTokens")
         or usage.get("completion_tokens")
         or usage.get("completion_token_count")
         or 0
     )
     if inp == 0 and out == 0:
-        total = int(usage.get("total_tokens") or 0)
+        total = int(usage.get("total_tokens") or usage.get("totalTokens") or 0)
         if total > 0:
             out = total
-    return inp, out
+    cache_read = int(
+        usage.get("cacheReadInputTokens")
+        or usage.get("cache_read_input_tokens")
+        or 0
+    )
+    return inp, out, cache_read
 
 
 def _extract_tool_name(line: str) -> str:
+    # Try actual aichat log format first: "run_llm_function called with cmd_name: <name>"
+    m = RE_CMD_NAME.search(line)
+    if m:
+        return m.group(1).strip()
     m = RE_TOOL_CALL.search(line)
     if m:
         return m.group(1).strip()
@@ -155,6 +170,7 @@ def parse_incremental(log_path: Path, state: dict) -> tuple[list[dict], dict]:
         return events, state
 
     decoded = chunk.decode("utf-8", errors="replace")
+    decoded = decoded.replace('\x00', '')
     text = state.get("pending_fragment", "") + decoded
     lines = text.splitlines(keepends=True)
 
@@ -178,19 +194,46 @@ def parse_incremental(log_path: Path, state: dict) -> tuple[list[dict], dict]:
         if RE_NON_STREAM_MARKER.search(line):
             try:
                 data = _find_first_json_object(line) or {}
-                inp, out = _extract_usage(data)
+                inp, out, cache_read = _extract_usage(data)
                 state["total_input_tokens"] = int(state.get("total_input_tokens", 0)) + inp
                 state["total_output_tokens"] = int(state.get("total_output_tokens", 0)) + out
+                state["total_cache_read_tokens"] = int(state.get("total_cache_read_tokens", 0)) + cache_read
                 state["llm_turn_count"] = int(state.get("llm_turn_count", 0)) + 1
                 events.append(
                     {
                         "event_type": "llm_turn_end",
                         "input_tokens": inp,
                         "output_tokens": out,
+                        "cache_read_tokens": cache_read,
                         "model": data.get("model", ""),
                         "line_ts": line_ts,
                     }
                 )
+                # Extract toolUse blocks from output.message.content (Bedrock format)
+                output_section = data.get("output", {})
+                if isinstance(output_section, dict):
+                    message_section = output_section.get("message", {})
+                    if isinstance(message_section, dict):
+                        content_items = message_section.get("content", [])
+                        for item in (content_items if isinstance(content_items, list) else []):
+                            if isinstance(item, dict) and item.get("type") == "toolUse":
+                                tool_name = item.get("name", "")
+                                tool_args = item.get("input", {})
+                                if not isinstance(tool_args, dict):
+                                    tool_args = {}
+                                ralph_dir = str(tool_args.get("ralph_dir") or tool_args.get("resume") or "")
+                                ralph_step = _find_current_ralph_step(ralph_dir)
+                                events.append(
+                                    {
+                                        "event_type": "tool_call_requested",
+                                        "tool_use_id": item.get("toolUseId", ""),
+                                        "tool_name": tool_name,
+                                        "tool_args": tool_args,
+                                        "ralph_dir": ralph_dir,
+                                        "ralph_step": ralph_step,
+                                        "line_ts": line_ts,
+                                    }
+                                )
             except (TypeError, ValueError):
                 pass
 
@@ -217,6 +260,19 @@ def parse_incremental(log_path: Path, state: dict) -> tuple[list[dict], dict]:
                     "line_ts": line_ts,
                 }
             )
+            state["last_executed_tool"] = tool_name
+
+        if RE_TOOL_OUTPUT.search(line):
+            m_out = RE_TOOL_OUTPUT.search(line)
+            success = m_out.group(1).lower() == "true"
+            events.append(
+                {
+                    "event_type": "tool_output",
+                    "success": success,
+                    "tool_name": state.get("last_executed_tool", ""),
+                    "line_ts": line_ts,
+                }
+            )
 
     if events:
         total_input = int(state.get("total_input_tokens", 0))
@@ -227,6 +283,7 @@ def parse_incremental(log_path: Path, state: dict) -> tuple[list[dict], dict]:
                 "total_input_tokens": total_input,
                 "total_output_tokens": total_output,
                 "total_tokens": total_input + total_output,
+                "total_cache_read_tokens": int(state.get("total_cache_read_tokens", 0)),
                 "tool_call_count": int(state.get("tool_call_count", 0)),
                 "llm_turn_count": int(state.get("llm_turn_count", 0)),
             }
