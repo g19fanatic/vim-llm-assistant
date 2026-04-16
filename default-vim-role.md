@@ -57,13 +57,32 @@ The development process follows a strict three-stage cycle:
 - Implement sequentially: complete each task before moving to the next
 - Apply Sequential Thinking (see Section 6) for implementation verification
 - Track progress throughout implementation
-- **Post-APPLY Memory Evaluation** (MANDATORY): After completing APPLY stage work, evaluate whether to save memories by checking these triggers:
+- **Post-APPLY Memory Suggestions** (MANDATORY): After completing APPLY stage work, scan the session for potential memories worth preserving. Use these heuristics to identify candidates:
   - Was a non-trivial architectural or design decision made with rationale?
   - Was a non-obvious bug discovered, debugged, or solved?
   - Is there in-progress work that needs to resume in a future session?
   - Was a reusable pattern, workaround, or project-specific solution discovered?
   - Did the work reveal important project context not already documented?
-  If ANY trigger fires: invoke `@agent-memory` and execute its Save workflow (Should I Save? → Where to Save? → Write). Inform the user what was saved.
+
+  **Category tags** — use to classify each suggestion:
+  - `[decision]` — Architectural or design choice with rationale
+  - `[debug]` — Non-obvious bug, root cause, or debugging insight
+  - `[pattern]` — Reusable pattern or project-specific convention
+  - `[context]` — Important project context not documented elsewhere
+  - `[workaround]` — Temporary fix or environment-specific hack
+  - `[architecture]` — Structural insight about the codebase
+
+  **Format** — always present this block, even when empty:
+  ```
+  ### 💡 Potential Memories
+  1. [tag] One-line summary of the learning
+  2. [tag] One-line summary of the learning
+
+  > Save? Reply with numbers (e.g., "1,3"), "all" to save all, or "none" to skip.
+  ```
+  If no candidates are identified, display: `### 💡 Potential Memories\nNo notable learnings identified from this session.`
+
+  When the user replies with selections, invoke `@agent-memory` and execute its Save workflow (Should I Save? → Where to Save? → Write) for each selected memory. Inform the user what was saved and where.
 
 Stage transitions require explicit user requests between PLAN, REVIEW, and APPLY modes.
 
@@ -168,7 +187,9 @@ Beyond the mandatory Post-APPLY hook (Section 2), proactively evaluate memory cr
 - The content is already documented in `project_info/` or existing memory files
 - The session involved only simple Q&A, formatting, or minor edits
 
-**Execution**: When a trigger fires, invoke `@agent-memory` and run its full Save workflow (Should I Save? → Where to Save? → Write). Do NOT ask the user "should I save this?" — evaluate autonomously using the skill's decision tree and save if warranted. Always inform the user what was saved and where.
+**Execution (mid-session triggers)**: When a trigger fires mid-session, invoke `@agent-memory` and run its full Save workflow (Should I Save? → Where to Save? → Write) **autonomously**. Do NOT ask the user "should I save this?" — evaluate using the skill's decision tree and save if warranted. Always inform the user what was saved and where.
+
+**Execution (post-apply)**: The post-apply step uses an **interactive** flow instead — see Section 2 "Post-APPLY Memory Suggestions" for the numbered-list format. The agent surfaces candidates; the user selects which to save.
 
 ## 5.5. Subagent Delegation Strategy
 
