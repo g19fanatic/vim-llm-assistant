@@ -14,10 +14,28 @@ function! s:show_status_message(timer) abort
   endif
   let s:timer_tick_count[a:timer] += 1
   call llm#debug('s:show_status_message: Timer tick #' . s:timer_tick_count[a:timer] . ' (timer_id=' . a:timer . ')')
-  let l:job_count = len(s:llm_jobs)
-  let l:job_suffix = l:job_count > 1 ? ' (' . l:job_count . ' jobs)' : ''
+
+  " Guard against race condition where timer fires after job removal
+  if empty(s:llm_jobs)
+    return
+  endif
+
+  " Build per-job blurbs with ID, elapsed time, and temp path
+  let l:blurbs = []
+  for [l:job_id, l:job_info] in items(s:llm_jobs)
+    let l:elapsed = localtime() - l:job_info.start_time
+    let l:temp = has_key(l:job_info, 'temp_file') ? l:job_info.temp_file : '?'
+    call add(l:blurbs, {'elapsed': l:elapsed, 'text': l:job_id . '. ' . l:elapsed . 's ' . l:temp})
+  endfor
+
+  " Sort by longest running first (descending elapsed)
+  call sort(l:blurbs, {a, b -> b.elapsed - a.elapsed})
+
+  " Join blurb texts (copy() avoids mutating l:blurbs in place)
+  let l:msg = join(map(copy(l:blurbs), 'v:val.text'), ', ')
+
   " Use echo instead of echom to avoid overwriting other messages
-  echo '[LLM] Processing...' . l:job_suffix
+  echo '[LLM] Processing: ' . l:msg
 endfunction
 
 " Generate unique job ID
@@ -174,7 +192,8 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
         \ 'timer_id': l:timer_id,
         \ 'prompt': a:prompt,
         \ 'model': l:model,
-        \ 'start_time': localtime()
+        \ 'start_time': localtime(),
+        \ 'temp_file': l:temp_file
         \ }
   
   call llm#debug('aichat.process_async: Job tracked with ID=' . l:job_id)
