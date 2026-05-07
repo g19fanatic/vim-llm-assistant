@@ -96,7 +96,7 @@ g:llm_adapters                         *g:llm_adapters*
 
     Example:
         " Load multiple adapters
-        let g:llm_adapters = ['aichat', 'custom_adapter']
+        let g:llm_adapters = ['aichat', 'llm', 'custom_adapter']
 
 Additional Note:
     The :SetLLMModel command now supports a dynamic completion feature. When
