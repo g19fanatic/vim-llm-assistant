@@ -550,32 +550,37 @@ function! llm#run(...) abort
     let l:active_contents = llm#get_buffer_content(l:active_bufnr, l:active_filename)
   endif
 
-  " Assemble the data dictionary.
-  let l:data = {
-        \ 'cursor_line': l:cursor_line,
-        \ 'cursor_col':  l:cursor_col,
-        \ 'buffers':     l:buffers,
-        \ 'active_buffer': {
-        \      'filename': l:active_filename,
-        \      'contents': l:active_contents,
-        \ },
+  " Assemble the data dictionary in cache-optimized order:
+  "   stable (large) → variable (small) for maximum prefix cache hits.
+  "   1. llm_history    — large, stable prefix (earlier turns never change)
+  "   2. buffers[]      — stable across requests in same session
+  "   3. active_buffer  — stable most of the time
+  "   4. file_arguments — stable per session
+  "   5. prompt         — changes per request
+  "   6. cursor_line    — changes constantly (small)
+  "   7. cursor_col     — changes constantly (small)
+  let l:data = {}
+
+  if exists('g:llm_scratch_bufnr')
+    let l:data.llm_history = join(getbufline(g:llm_scratch_bufnr, 1, '$'), "\n")
+  endif
+
+  let l:data.buffers = l:buffers
+  let l:data.active_buffer = {
+        \ 'filename': l:active_filename,
+        \ 'contents': l:active_contents,
         \ }
 
-  " Include the prompt if provided.
-  if l:prompt != ''
-    let l:data.prompt = l:prompt
-  endif
-  
-  " Include file arguments if provided
   if !empty(l:file_list)
     let l:data.file_arguments = l:file_list
   endif
 
-  " Always add the scratch buffer's contents as llm_history if it exists
-  if exists('g:llm_scratch_bufnr')
-    let l:history = join(getbufline(g:llm_scratch_bufnr, 1, '$'), "\n")
-    let l:data.llm_history = l:history
+  if l:prompt != ''
+    let l:data.prompt = l:prompt
   endif
+
+  let l:data.cursor_line = l:cursor_line
+  let l:data.cursor_col  = l:cursor_col
 
   " Convert the data dictionary to JSON.
   let l:json_data = llm#encode(l:data)
