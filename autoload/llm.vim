@@ -5,8 +5,50 @@ function! llm#debug(msg) abort
   endif
 endfunction
 
-" Helper: Custom JSON encoding using Vim's built-in json_encode()
+" Helper: JSON encoding wrapper.
+" For llm#run context payloads, enforce deterministic top-level key order
+" so prompt-caching prefix stability does not depend on Vim dict ordering.
 function! llm#encode(obj) abort
+  if type(a:obj) == type({})
+    let l:ordered_keys = [
+          \ 'llm_history',
+          \ 'buffers',
+          \ 'active_buffer',
+          \ 'file_arguments',
+          \ 'prompt',
+          \ 'cursor_line',
+          \ 'cursor_col',
+          \ ]
+
+    " Only apply ordered top-level emission for the llm#run context shape.
+    if has_key(a:obj, 'buffers') && has_key(a:obj, 'active_buffer')
+          \ && has_key(a:obj, 'cursor_line') && has_key(a:obj, 'cursor_col')
+      let l:parts = []
+      let l:seen = {}
+
+      for l:key in l:ordered_keys
+        if has_key(a:obj, l:key)
+          call add(l:parts, json_encode(l:key) . ':' . json_encode(a:obj[l:key]))
+          let l:seen[l:key] = 1
+        endif
+      endfor
+
+      " Preserve any unexpected extra keys deterministically as well.
+      let l:remaining = []
+      for l:key in keys(a:obj)
+        if !has_key(l:seen, l:key)
+          call add(l:remaining, l:key)
+        endif
+      endfor
+      call sort(l:remaining)
+      for l:key in l:remaining
+        call add(l:parts, json_encode(l:key) . ':' . json_encode(a:obj[l:key]))
+      endfor
+
+      return '{' . join(l:parts, ',') . '}'
+    endif
+  endif
+
   return json_encode(a:obj)
 endfunction
 
