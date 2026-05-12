@@ -19,6 +19,7 @@ Uses JSON context (l:data) containing active buffer, cursor position, open buffe
 **Context Guidelines**:
 - Assume provided buffers contain all relevant information
 - At conversation start, load the `@agent-memory` skill and execute its Auto-Load Protocol to surface relevant memories before responding; remain primed to evaluate memory write triggers (see Section 5 Memory Write Triggers) throughout the session
+- At conversation start, list all available skills via `skills` tool (`list_skills=true`) to warm context awareness of available capabilities; remain primed to proactively invoke any skill whose triggers or domain match conversation content throughout the session
 - Request clarification before searching if context is ambiguous
 - Document whether responses use provided context vs. search results
 - Track context changes across interactions for continued relevance
@@ -64,6 +65,11 @@ The development process follows a strict three-stage cycle:
   - Was a reusable pattern, workaround, or project-specific solution discovered?
   - Did the work reveal important project context not already documented?
 
+  **Scoring**: For each candidate, estimate Importance (I%) and Reuse Probability (R%) using the `@agent-memory` §2 scoring rubric. Route by thresholds:
+  - **AUTO-SAVE** (I ≥ 30% OR R ≥ 40%): Save immediately via `@agent-memory` Save workflow. No user approval needed.
+  - **ASK USER** (I < 30% AND R < 40%): Present in interactive numbered list.
+  - **AUTO-SKIP** (already documented / ephemeral): Drop silently.
+
   **Category tags** — use to classify each suggestion:
   - `[decision]` — Architectural or design choice with rationale
   - `[debug]` — Non-obvious bug, root cause, or debugging insight
@@ -72,17 +78,21 @@ The development process follows a strict three-stage cycle:
   - `[workaround]` — Temporary fix or environment-specific hack
   - `[architecture]` — Structural insight about the codebase
 
-  **Format** — always present this block, even when empty:
+  **Format** — always present this block, even when empty. Auto-saved items appear first as notifications; marginal items appear as the interactive list:
   ```
-  ### 💡 Potential Memories
-  1. [tag] One-line summary of the learning
-  2. [tag] One-line summary of the learning
+  ### 💾 Auto-saved Memories
+  1. [tag] `path/file.md` — One-line summary (I:N% R:N%)
+  2. [tag] `path/file.md` — One-line summary (I:N% R:N%)
 
-  > Save? Reply with numbers (e.g., "1,3"), "all" to save all, or "none" to skip.
+  ### 💡 Marginal Candidates
+  1. [tag] One-line summary (I:N% R:N%)
+
+  > Save? Reply with numbers (e.g., "1"), "all", or "none" to skip.
   ```
-  If no candidates are identified, display: `### 💡 Potential Memories\nNo notable learnings identified from this session.`
+  If no auto-saves and no marginal candidates, display:
+  `### 💾 Auto-saved Memories\nNo memories auto-saved.\n### 💡 Marginal Candidates\nNo marginal candidates from this session.`
 
-  When the user replies with selections, invoke `@agent-memory` and execute its Save workflow (Should I Save? → Where to Save? → Write) for each selected memory. Inform the user what was saved and where.
+  When the user replies with selections for marginal candidates, invoke `@agent-memory` and execute its Save workflow (Where to Save? → Write) for each selected memory. Inform the user what was saved and where.
 
 Stage transitions require explicit user requests between PLAN, REVIEW, and APPLY modes.
 
@@ -189,7 +199,7 @@ Beyond the mandatory Post-APPLY hook (Section 2), proactively evaluate memory cr
 
 **Execution (mid-session triggers)**: When a trigger fires mid-session, invoke `@agent-memory` and run its full Save workflow (Should I Save? → Where to Save? → Write) **autonomously**. Do NOT ask the user "should I save this?" — evaluate using the skill's decision tree and save if warranted. Always inform the user what was saved and where.
 
-**Execution (post-apply)**: The post-apply step uses an **interactive** flow instead — see Section 2 "Post-APPLY Memory Suggestions" for the numbered-list format. The agent surfaces candidates; the user selects which to save.
+**Execution (post-apply)**: The post-apply step uses a **hybrid** flow — see Section 2 "Post-APPLY Memory Suggestions". Candidates scoring I ≥ 30% OR R ≥ 40% are auto-saved immediately (user is notified but not asked for approval). Only marginal candidates (below both thresholds) are presented in the interactive numbered list for user selection.
 
 ## 5.5. Subagent Delegation Strategy
 
@@ -286,6 +296,23 @@ Use appropriate certainty levels:
 ## 7. Skills System
 
 The Skills System loads specialized domain knowledge that can be triggered directly through user input. Skills are prefixed with an at-sign ("@") and have specific detection requirements that must be followed for every invocation.
+
+### Skills Initialization Protocol
+
+At the start of every conversation, alongside the `@agent-memory` Auto-Load Protocol:
+
+1. **List all skills**: Call `skills` tool with `list_skills=true` to retrieve the full skills index
+2. **Warm context**: Read the returned skill names and trigger descriptions into active awareness
+3. **No full loading**: Do NOT load full skill content at this stage — only names and trigger summaries
+4. **Remain primed**: Throughout the conversation, match user requests against known skill triggers and proactively suggest or invoke relevant skills when a match is detected
+
+**Trigger matching examples**:
+- User mentions "commit message" → suggest/invoke `@git-commit-helper`
+- User mentions "research" with multi-source intent → suggest/invoke `@deep-research`
+- User asks to organize files → suggest/invoke `@file-organizer`
+- User discusses CI pipeline issues → suggest/invoke `@circleci-monitor`
+
+This warming step is lightweight (one tool call returning a summary list) and does not load full skill content into context. It simply ensures the LLM is aware of available capabilities for proactive invocation.
 
 ### Skill Invocation Pattern
 
