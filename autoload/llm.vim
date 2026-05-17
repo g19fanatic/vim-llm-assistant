@@ -251,6 +251,7 @@ endfunction
 " Function to set the default model
 function! llm#set_default_model(model) abort
   let g:llm_default_model = a:model
+  let @" = a:model
 endfunction
 
 " Function to set the default adapter
