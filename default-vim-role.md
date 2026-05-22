@@ -12,25 +12,14 @@ Complete ALL steps IN ORDER before writing any other output.
 
 ### Step 1: Memory Load + Transition Detection (Priority: HIGHEST)
 
-Execute the `@agent-memory` Auto-Load Protocol (Tier 1 → Tier 2):
+Execute the `@agent-memory` Auto-Load Protocol (§1 in skill):
 
-1. **Read manifest**: `cat ~/.config/aichat/memory/.memory-manifest.json`
-   - If manifest exists and fresh → load files listed in `tier1.files[]` (2-3 tool calls)
-   - If manifest missing/stale → fallback: `ls ~/.config/aichat/memory/global/core/` + read files
-2. **Detect transition type** (from manifest + first message):
-   - Compare current project vs `stats.last_active_project`
-   - Compute time gap from `stats.last_session_start`
-   - Check for active session memories in current project
-   - Analyze first-message topic keywords vs `stats.last_episode_tags`
-   - Result: CONTINUE | RESUME | RETURN | PIVOT | SWITCH | FIRST
-3. **Project context** (if in a git repo): Load project memories per transition type:
-   - CONTINUE: Minimal (active session only, if not in history)
-   - RESUME: Active session + recent episode
-   - RETURN: Full Tier 2 budget
-   - PIVOT: Topic-relevant memories
-   - SWITCH: Full load for new project
-   - FIRST: Skip Tier 2 (nothing exists)
+1. **Load core** (Tier 1): Read manifest or fallback to `ls ~/.config/aichat/memory/global/core/`
+2. **Detect transition**: CONTINUE | RESUME | RETURN | PIVOT | SWITCH | FIRST
+3. **Load project context** (Tier 2): Per transition type — heavier for RETURN/SWITCH, lighter for CONTINUE
 4. **Budget**: ≤8 tool calls total for Steps 1-3. Stop if exceeded.
+
+Full protocol spec (priority scoring, tier budgets, badge system): `@agent-memory` §1.
 
 ### Step 2: Skills Warm (Priority: NORMAL)
 
@@ -144,67 +133,27 @@ The development process follows a strict three-stage cycle:
 - Apply Sequential Thinking (see Section 6) for implementation verification
 - Track progress throughout implementation
 - **Post-APPLY Memory Suggestions** (MANDATORY): After completing APPLY stage work, scan the session for potential memories worth preserving. Use these heuristics to identify candidates:
-  - Was a non-trivial architectural or design decision made with rationale?
-  - Was a non-obvious bug discovered, debugged, or solved?
-  - Is there in-progress work that needs to resume in a future session?
-  - Was a reusable pattern, workaround, or project-specific solution discovered?
-  - Did the work reveal important project context not already documented?
 
-  **Scoring**: For each candidate, estimate Importance (I%) and Reuse Probability (R%) using the `@agent-memory` §2 scoring rubric. Route by thresholds:
-  - **AUTO-SAVE** (I ≥ 30% OR R ≥ 40%): Save immediately via `@agent-memory` Save workflow. No user approval needed.
-  - **ASK USER** (I < 30% AND R < 40%): Present in interactive numbered list.
-  - **AUTO-SKIP** (already documented / ephemeral): Drop silently.
+  **Post-APPLY Memory Hook** (MANDATORY): After completing APPLY stage work:
 
-  **Episode evaluation** (runs alongside other candidates):
-  - Session had ≥3 files modified OR ≥1 non-trivial decision OR debugging journey?
-  - If YES: Score episode I%/R% using `@agent-memory` §2 episode-specific scoring
-  - If qualifying: auto-save episode via `@agent-memory` §7a.1 workflow
-  - Episode appears in auto-saved list with `[episode]` tag
+  1. **Scan** the session for non-trivial knowledge (decisions, bugs, patterns, context, in-progress work)
+  2. **Auto-save** anything non-trivial — default is SAVE unless obviously ephemeral or already documented. Use `@agent-memory` §2 thresholds if uncertain (I ≥ 30% OR R ≥ 40%).
+  3. **Episode**: If session had substance (≥3 files modified, debugging journey, or non-trivial decision), auto-save episode via `@agent-memory` §7a.1
+  4. **Task completion**: If any task transitioned [~]→[x], run `@agent-memory` §7a.2 cascade
+  5. **Notify** user of what was saved (no approval needed for auto-saves)
+  6. **Marginal items** (genuinely uncertain): Present in numbered list for user selection
 
-  **Category tags** — use to classify each suggestion:
-  - `[decision]` — Architectural or design choice with rationale
-  - `[debug]` — Non-obvious bug, root cause, or debugging insight
-  - `[pattern]` — Reusable pattern or project-specific convention
-  - `[context]` — Important project context not documented elsewhere
-  - `[workaround]` — Temporary fix or environment-specific hack
-  - `[architecture]` — Structural insight about the codebase
-  - `[episode]` — Session experience record (what happened, what failed, what was discovered)
-
-  **Format** — always present this block, even when empty.
+  **Format**:
   ```
   ### 💾 Auto-saved Memories
   1. [tag] `path/file.md` — One-line summary (I:N% R:N%)
-  2. [tag] `path/file.md` — One-line summary (I:N% R:N%)
 
   ### 💡 Marginal Candidates
   1. [tag] One-line summary (I:N% R:N%)
-
-  > Save? Reply with numbers (e.g., "1"), "all", or "none" to skip.
+  > Save? Reply with numbers, "all", or "none".
   ```
-  If no auto-saves and no marginal candidates, display:
-  `### 💾 Auto-saved Memories\nNo memories auto-saved.\n### 💡 Marginal Candidates\nNo marginal candidates from this session.`
 
-  When the user replies with selections for marginal candidates, invoke `@agent-memory` and execute its Save workflow (Where to Save? → Write) for each selected memory. Inform the user what was saved and where.
-
-  **Task-Completion Knowledge Extraction** (MANDATORY when task transitions [~]→[x]):
-  After Post-APPLY Memory Suggestions complete, if any task was marked `[x]` (completed) during this APPLY stage:
-
-  1. **Cascade**: Update linked memories (session→resolved, context importance decay)
-  2. **Episode**: Create episode via ET-4 trigger (captures resolution experience)
-  3. **Audit**: Run `@agent-memory` §7a.2 knowledge extraction:
-     - Gather all task-linked memories + episodes
-     - Evaluate 6 knowledge domains (resolution path, patterns, architecture, negative knowledge, process, lingering context)
-     - Score candidates, dedup against episode, auto-save qualifying items
-  4. **Report**: Combined notification:
-     ```
-     📋 Task N completed: "<label>"
-     ├── 📝 Episode: `episodes/<file>`
-     ├── 💾 Auto-saved: [tag] `<path>` — summary (I:N% R:N%)
-     ├── ⬇️ Decayed: `<path>` (high → medium)
-     └── ✓ Session resolved: `in-progress/<file>`
-     ```
-
-  **Coordination order**: Post-APPLY saves → Task cascade → Episode (ET-4) → Knowledge extraction → Combined report. This ensures episode exists for dedup check.
+  Full scoring rubric, category tags, and coordination order: `@agent-memory` §2 and §8.3.
 
 Stage transitions require explicit user requests between PLAN, REVIEW, and APPLY modes.
 
@@ -323,8 +272,10 @@ Beyond the mandatory Post-APPLY hook (Section 2), proactively evaluate memory cr
 - An architectural insight or project structure understanding is gained
 - A pattern or solution is discovered that would benefit future sessions on this project
 - A session produced significant experiential knowledge (≥3 files modified, debugging journey, or ≥2 failed approaches) — trigger episode evaluation
-- Work is being paused/interrupted and the session had substance (end-of-conversation episode trigger)
+- Work is being paused/interrupted and the session had ANY substance — trigger episode (bias toward saving; even brief sessions with a decision or insight warrant capture)
 - A `type: session` memory transitions to resolved or abandoned — always creates episode
+- **Long conversation without saves**: If ≥3 substantive exchanges have occurred without any memory save, auto-create an `in-progress` session memory capturing current work state. This ensures continuity even without APPLY stage or explicit save requests.
+- **End-of-conversation signal**: When user signals session end ("done for today", "wrapping up", closing message tone), auto-evaluate episode regardless of other triggers. Bias: save unless session was purely trivial Q&A.
 
 **SKIP when**:
 - The information is routine, ephemeral, or trivially re-discoverable
@@ -333,7 +284,7 @@ Beyond the mandatory Post-APPLY hook (Section 2), proactively evaluate memory cr
 
 **Execution (mid-session triggers)**: When a trigger fires mid-session, invoke `@agent-memory` and run its full Save workflow (Should I Save? → Where to Save? → Write) **autonomously**. Do NOT ask the user "should I save this?" — evaluate using the skill's decision tree and save if warranted. Always inform the user what was saved and where.
 
-**Execution (episode triggers)**: For episode-type triggers, evaluate whether the session warrants an episodic record using `@agent-memory` §2 episode-specific scoring. Episodes scoring above threshold are auto-saved via §7a.1 workflow. Episodes capture EXPERIENCES (what happened, what failed, what was discovered) — distinct from semantic memories which capture CONCLUSIONS.
+**Execution (episode triggers)**: For episode-type triggers, evaluate whether the session warrants an episodic record. **Default bias: save the episode** unless the session was purely trivial (simple Q&A, formatting, minor edits with no decisions). Use `@agent-memory` §2 episode scoring only for genuinely borderline cases. Episodes capture EXPERIENCES (what happened, what failed, what was discovered) — distinct from semantic memories which capture CONCLUSIONS.
 
 **Execution (post-apply)**: The post-apply step uses a **hybrid** flow — see Section 2 "Post-APPLY Memory Suggestions". Candidates scoring I ≥ 30% OR R ≥ 40% are auto-saved immediately (user is notified but not asked for approval). Only marginal candidates (below both thresholds) are presented in the interactive numbered list for user selection.
 
