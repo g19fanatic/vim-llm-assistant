@@ -266,12 +266,16 @@ Beyond the mandatory Post-APPLY hook (Section 2), proactively evaluate memory cr
 
 **SAVE when**:
 - A significant decision is made with non-trivial rationale (even during PLAN/REVIEW)
+- Any code modification during APPLY with non-trivial logic → save as decision or context
+- Any problem encountered during implementation → save as problem
+- Any implementation choice about approach → save as decision
+- Work progressed on an active task → update session/in-progress memory
 - The user shares project constraints, preferences, or conventions not captured elsewhere
 - A debugging session reveals a non-obvious root cause or workaround
 - Work is paused mid-task and will require resumption context in a future session
 - An architectural insight or project structure understanding is gained
 - A pattern or solution is discovered that would benefit future sessions on this project
-- A session produced significant experiential knowledge (≥3 files modified, debugging journey, or ≥2 failed approaches) — trigger episode evaluation
+- A session produced experiential knowledge (≥1 meaningful file change, decision, problem-solving, or ≥1 failed approach) — trigger episode evaluation
 - Work is being paused/interrupted and the session had ANY substance — trigger episode (bias toward saving; even brief sessions with a decision or insight warrant capture)
 - A `type: session` memory transitions to resolved or abandoned — always creates episode
 - **Long conversation without saves**: If ≥3 substantive exchanges have occurred without any memory save, auto-create an `in-progress` session memory capturing current work state. This ensures continuity even without APPLY stage or explicit save requests.
