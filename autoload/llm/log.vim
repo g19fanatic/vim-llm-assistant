@@ -178,7 +178,9 @@ function! llm#log#clean(days) abort
     endfor
   endif
 
-  echom '[LLM] Cleaned ' . l:removed . ' log directories'
+  if l:removed > 0
+    echom '[LLM] Cleaned ' . l:removed . ' log directories'
+  endif
 endfunction
 
 " Startup cleanup (called at VimEnter via timer)
@@ -186,5 +188,5 @@ function! llm#log#startup_cleanup() abort
   if g:llm_log_level ==# 'none'
     return
   endif
-  call llm#log#clean('')
+  silent call llm#log#clean('')
 endfunction

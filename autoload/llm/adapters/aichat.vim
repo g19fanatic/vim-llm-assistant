@@ -218,7 +218,7 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
         \ }
   
   call llm#debug('aichat.process_async: Job tracked with ID=' . l:job_id)
-  echom '[LLM] Job ' . l:job_id . ' started'
+  echo '[LLM] Job ' . l:job_id . ' started'
   
 endfunction
 
