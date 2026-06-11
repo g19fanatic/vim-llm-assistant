@@ -67,13 +67,7 @@ function! llm#log#open(type) abort
       echom '[LLM] No session.log found'
       return
     endif
-    " Copy content to scratch buffer
-    let l:content = readfile(l:file)
-    call llm#open_scratch_buffer()
-    call append('$', ['', '--- [LLM Log: session @ ' . strftime('%H:%M:%S') . '] ---', ''])
-    call append('$', l:content)
-    normal! G
-    " Also open in vsplit for direct file access
+    " Open in vsplit for direct file access
     execute 'vsplit ' . fnameescape(l:file)
     normal! G
     return
@@ -84,8 +78,13 @@ function! llm#log#open(type) abort
     return
   endif
 
-  " Find latest request directory
-  let l:latest_dir = expand(g:llm_log_dir) . '/latest'
+  " Find latest request directory (prefer per-instance tracking over global symlink)
+  let l:paths = llm#get_current_log_paths()
+  if has_key(l:paths, 'dir')
+    let l:latest_dir = l:paths.dir
+  else
+    let l:latest_dir = expand(g:llm_log_dir) . '/latest'
+  endif
   if !isdirectory(l:latest_dir)
     echom '[LLM] No log directories found in ' . g:llm_log_dir
     return
@@ -102,14 +101,7 @@ function! llm#log#open(type) abort
     return
   endif
 
-  " Copy content to the LLM scratch buffer
-  let l:content = readfile(l:file)
-  call llm#open_scratch_buffer()
-  call append('$', ['', '--- [LLM Log: ' . l:type . ' @ ' . strftime('%H:%M:%S') . '] ---', ''])
-  call append('$', l:content)
-  normal! G
-
-  " Also open in vsplit for direct file access
+  " Open in vsplit for direct file access
   execute 'vsplit ' . fnameescape(l:file)
   normal! G
 endfunction
