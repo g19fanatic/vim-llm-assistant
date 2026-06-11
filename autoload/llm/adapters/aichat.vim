@@ -24,7 +24,8 @@ function! s:show_status_message(timer) abort
   let l:blurbs = []
   for [l:job_id, l:job_info] in items(s:llm_jobs)
     let l:elapsed = localtime() - l:job_info.start_time
-    let l:temp = has_key(l:job_info, 'temp_file') ? l:job_info.temp_file : '?'
+    let l:temp = has_key(l:job_info, 'log_file') ? l:job_info.log_file
+          \ : (has_key(l:job_info, 'temp_file') ? l:job_info.temp_file : '?')
     call add(l:blurbs, {'elapsed': l:elapsed, 'text': l:job_id . '. ' . l:elapsed . 's ' . l:temp})
   endfor
 
@@ -120,6 +121,9 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   
   let l:temp_file = tempname()
   
+  " Get log paths from module-level state (set by llm#run)
+  let l:log_paths = llm#get_current_log_paths()
+
   " Check for command augmentation function
   let l:cmd_extra = ''
   if exists('g:llm_adapter_cmd_extra') && has_key(g:llm_adapter_cmd_extra, 'aichat')
@@ -148,7 +152,11 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   call llm#debug('aichat.process_async: Parsed ' . (len(split(l:file_flags)) / 2) . ' file arguments')
   
   " Construct command as a list for job_start
-  let l:cmd_base = ['bash', '-c', l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename)]
+  let l:aichat_log_env = ''
+  if g:llm_log_level ==# 'debug' && has_key(l:log_paths, 'aichat')
+    let l:aichat_log_env = 'AICHAT_LOG_PATH=' . shellescape(l:log_paths.aichat) . ' AICHAT_LOG_LEVEL=debug '
+  endif
+  let l:cmd_base = ['bash', '-c', l:cmd_extra . l:aichat_log_env . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename)]
   if !empty(a:prompt)
     let l:cmd_base[2] .= ' -- ' . shellescape(a:prompt)
   endif
@@ -160,11 +168,22 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   " Start status timer (before job callbacks to capture in closure)
   let l:timer_id = timer_start(2000, function('s:show_status_message'), {'repeat': -1})
   call llm#debug('aichat.process_async: Started timer_id=' . l:timer_id)
+
+  " Write response header for context when tailing
+  if g:llm_log_level !=# 'none' && !empty(l:log_paths)
+    call writefile([
+          \ '<!-- vim-llm-assistant response log -->',
+          \ '<!-- Time: ' . strftime('%c') . ' -->',
+          \ '<!-- Model: ' . l:model . ' -->',
+          \ '<!-- Prompt: ' . a:prompt . ' -->',
+          \ '',
+          \ ], l:log_paths.response)
+  endif
   
   " Job callbacks
   let l:job_opts = {
         \ 'in_io': 'null',
-        \ 'out_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.out_cb: Received ' . len(msg) . ' chars')]},
+        \ 'out_cb': {channel, msg -> [add(l:output, msg), (g:llm_log_level !=# 'none' && !empty(l:log_paths) ? writefile([msg], l:log_paths.response, 'a') : 0), llm#debug('aichat.out_cb: Received ' . len(msg) . ' chars')]},
         \ 'err_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.err_cb: ' . msg)]},
         \ 'exit_cb': {job, status -> s:on_job_complete(l:job_id, l:output, l:temp_file, l:timer_id, status, a:callback)},
         \ 'out_mode': 'nl',
@@ -193,7 +212,9 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
         \ 'prompt': a:prompt,
         \ 'model': l:model,
         \ 'start_time': localtime(),
-        \ 'temp_file': l:temp_file
+        \ 'temp_file': l:temp_file,
+        \ 'log_file': (!empty(l:log_paths) ? l:log_paths.response : l:temp_file),
+        \ 'log_paths': l:log_paths
         \ }
   
   call llm#debug('aichat.process_async: Job tracked with ID=' . l:job_id)
@@ -262,7 +283,10 @@ endfunction
 function! s:on_job_complete(job_id, output, temp_file, timer_id, status, callback) abort
   call llm#debug('s:on_job_complete: ENTER (job_id=' . a:job_id . ', timer_id=' . a:timer_id . ', status=' . a:status . ', output_lines=' . len(a:output) . ')')
   
-  " Remove job from tracking (only if it still exists)
+  " Get job info BEFORE removing from tracking
+  let l:job_info = get(s:llm_jobs, string(a:job_id), {})
+
+  " Remove job from tracking
   if has_key(s:llm_jobs, string(a:job_id))
     call remove(s:llm_jobs, string(a:job_id))
   endif
@@ -277,6 +301,13 @@ function! s:on_job_complete(job_id, output, temp_file, timer_id, status, callbac
   
   call llm#debug('s:on_job_complete: Timer stopped, total output=' . len(join(a:output, "\n")) . ' chars')
   
+  " Persist tool output to log before deleting temp file
+  if filereadable(a:temp_file) && getfsize(a:temp_file) > 0
+    if has_key(l:job_info, 'log_paths') && g:llm_log_level !=# 'none'
+      call writefile(readfile(a:temp_file), l:job_info.log_paths.tools)
+    endif
+  endif
+
   " Clean up temp file
   call delete(a:temp_file)
   
@@ -288,6 +319,17 @@ function! s:on_job_complete(job_id, output, temp_file, timer_id, status, callbac
   
   call llm#debug('s:on_job_complete: Calling final callback')
   call a:callback(l:result)
+
+  " Append to session.log (AFTER callback so we don't delay response display)
+  if g:llm_log_level !=# 'none' && !empty(l:job_info)
+    let l:duration = localtime() - get(l:job_info, 'start_time', localtime())
+    let l:entry = strftime('%Y-%m-%d %H:%M:%S') . ' | '
+          \ . get(l:job_info, 'model', '?') . ' | '
+          \ . l:duration . 's | '
+          \ . (a:status == 0 ? 'OK' : 'ERROR:' . a:status) . ' | '
+          \ . get(l:job_info, 'prompt', '')[:80]
+    call llm#log#session_append(l:entry)
+  endif
 endfunction
 
 " Get available models from aichat

@@ -30,6 +30,26 @@ if !exists('g:llm_use_async')
   let g:llm_use_async = has('job') && has('timers')
 endif
 
+" Persistent log directory (XDG data home compliant)
+if !exists('g:llm_log_dir')
+  let g:llm_log_dir = expand('~/.local/share/vim-llm-assistant/logs')
+endif
+
+" Log level: 'none' (no logging), 'info' (response + session), 'debug' (+ input + aichat)
+if !exists('g:llm_log_level')
+  let g:llm_log_level = 'info'
+endif
+
+" Cleanup: max log directories to keep (0 = unlimited)
+if !exists('g:llm_log_keep_count')
+  let g:llm_log_keep_count = 500
+endif
+
+" Cleanup: max log age in days (0 = keep forever)
+if !exists('g:llm_log_max_age_days')
+  let g:llm_log_max_age_days = 30
+endif
+
 " Optional: user-defined notification hook, called after :LLM or :LLMFile completes.
 " Define a function in your vimrc and assign it as a Funcref:
 "   let g:Llm_notify_func = function('MyLLMNotify')
@@ -57,6 +77,17 @@ command! ListLLMAdapters echo llm#adapter#list()
 " Job management commands
 command! -nargs=? StopLLMJob call llm#stop_job(<q-args>)
 command! ListLLMJobs call llm#list_jobs()
+
+" Log management commands
+command! -nargs=? -complete=customlist,llm#log#complete_types LLMLog call llm#log#open(<q-args>)
+command! LLMLogDir call llm#log#browse()
+command! -nargs=? LLMLogTail call llm#log#tail(<q-args>)
+command! -nargs=? LLMLogClean call llm#log#clean(<q-args>)
+
+" Run log cleanup at startup (non-blocking)
+if exists('g:llm_log_level') && g:llm_log_level !=# 'none'
+  autocmd VimEnter * call timer_start(0, {-> llm#log#startup_cleanup()})
+endif
 
 " Define mappings (can be commented out if the user prefers to define their own)
 " nnoremap <leader>ll :LLM<CR>

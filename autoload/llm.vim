@@ -5,6 +5,14 @@ function! llm#debug(msg) abort
   endif
 endfunction
 
+" Current request's log paths (set in llm#run, read by adapters)
+let s:current_log_paths = {}
+
+function! llm#get_current_log_paths() abort
+  return s:current_log_paths
+endfunction
+
+
 " Helper: JSON encoding wrapper.
 " For llm#run context payloads, enforce deterministic top-level key order
 " so prompt-caching prefix stability does not depend on Vim dict ordering.
@@ -630,8 +638,15 @@ function! llm#run(...) abort
   
   call llm#debug('llm#run: JSON data size=' . len(l:json_data) . ' bytes, files=' . len(l:file_list))
   
-  " Write the JSON data to a temporary file.
-  let l:tempfile = tempname()
+  " Create log request dir if logging enabled
+  let s:current_log_paths = (g:llm_log_level !=# 'none') ? llm#log#create_request() : {}
+
+  " Write the JSON data to a file (persist at debug level, temp otherwise)
+  if g:llm_log_level ==# 'debug' && !empty(s:current_log_paths)
+    let l:tempfile = s:current_log_paths.input
+  else
+    let l:tempfile = tempname()
+  endif
   call writefile(split(l:json_data, "\n"), l:tempfile)
   
   call llm#debug('llm#run: Created tempfile=' . l:tempfile)
@@ -667,8 +682,12 @@ function! llm#run(...) abort
    
     " Return focus to the previous window.
     wincmd p
-    " Clean up temp file
-    call delete(l:tempfile)
+    " Clean up temp file (skip if persisted as log input)
+    if g:llm_log_level ==# 'debug' && !empty(s:current_log_paths)
+      " Input JSON already at its final log path — don't delete
+    else
+      call delete(l:tempfile)
+    endif
     
     call llm#debug('OnLLMComplete: EXIT (buffer operations complete)')
     echom '[LLM] Complete!'
