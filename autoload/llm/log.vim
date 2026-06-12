@@ -56,6 +56,20 @@ function! llm#log#complete_types(arglead, cmdline, cursorpos) abort
         \ 'v:val =~ "^" . a:arglead')
 endfunction
 
+" Helper: focus existing window showing file, or vsplit it
+function! s:open_or_focus(file) abort
+  let l:bufnr = bufnr(a:file)
+  if l:bufnr != -1
+    for l:win in range(1, winnr('$'))
+      if winbufnr(l:win) == l:bufnr
+        execute l:win . 'wincmd w'
+        return
+      endif
+    endfor
+  endif
+  execute 'vsplit ' . fnameescape(a:file)
+endfunction
+
 " Open the most recent log file of a given type
 " Usage: :LLMLog [response|input|tools|aichat|session]
 function! llm#log#open(type) abort
@@ -68,7 +82,7 @@ function! llm#log#open(type) abort
       return
     endif
     " Open in vsplit for direct file access
-    execute 'vsplit ' . fnameescape(l:file)
+    call s:open_or_focus(l:file)
     normal! G
     return
   endif
@@ -102,7 +116,7 @@ function! llm#log#open(type) abort
   endif
 
   " Open in vsplit for direct file access
-  execute 'vsplit ' . fnameescape(l:file)
+  call s:open_or_focus(l:file)
   normal! G
 endfunction
 
@@ -121,6 +135,18 @@ function! llm#log#tail(type) abort
   let l:latest = expand(g:llm_log_dir) . '/latest/' . l:filename
 
   if has('terminal')
+    " Check if we already have a terminal tailing this file
+    let l:tail_pattern = 'tail.*' . escape(l:filename, '.')
+    for l:buf in term_list()
+      if bufname(l:buf) =~# l:tail_pattern
+        let l:win = bufwinnr(l:buf)
+        if l:win != -1
+          execute l:win . 'wincmd w'
+          echom '[LLM] Already tailing ' . l:latest
+          return
+        endif
+      endif
+    endfor
     execute 'botright terminal ++close tail -f ' . shellescape(l:latest)
     wincmd p
     echom '[LLM] Tailing ' . l:latest . ' (close terminal to stop)'
