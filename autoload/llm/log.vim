@@ -84,11 +84,15 @@ function! llm#log#open(type) abort
     " Open in vsplit for direct file access
     call s:open_or_focus(l:file)
     normal! G
+    let @" = l:file
+    let @+ = l:file
     return
   endif
 
   if l:type ==# 'dir'
     call llm#log#browse()
+    let @" = llm#log#dir()
+    let @+ = llm#log#dir()
     return
   endif
 
@@ -118,12 +122,16 @@ function! llm#log#open(type) abort
   " Open in vsplit for direct file access
   call s:open_or_focus(l:file)
   normal! G
+  let @" = l:file
+  let @+ = l:file
 endfunction
 
 " Browse the log directory in netrw
 function! llm#log#browse() abort
   let l:dir = llm#log#dir()
   execute 'edit ' . fnameescape(l:dir)
+  let @" = l:dir
+  let @+ = l:dir
 endfunction
 
 " Tail the current/latest response log in a terminal split
@@ -134,6 +142,8 @@ function! llm#log#tail(type) abort
   let l:filename = get(l:filemap, l:type, 'response.md')
   let l:latest = expand(g:llm_log_dir) . '/latest/' . l:filename
 
+  let @" = l:latest
+  let @+ = l:latest
   if has('terminal')
     " Check if we already have a terminal tailing this file
     let l:tail_pattern = 'tail.*' . escape(l:filename, '.')
