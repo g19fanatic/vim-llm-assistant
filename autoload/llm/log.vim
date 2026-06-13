@@ -140,7 +140,14 @@ function! llm#log#tail(type) abort
   let l:type = empty(a:type) ? 'response' : a:type
   let l:filemap = {'response': 'response.md', 'aichat': 'aichat.log'}
   let l:filename = get(l:filemap, l:type, 'response.md')
-  let l:latest = expand(g:llm_log_dir) . '/latest/' . l:filename
+
+  " Resolve explicit log dir (same as :LLMLog), fall back to symlink
+  let l:paths = llm#get_current_log_paths()
+  if has_key(l:paths, 'dir')
+    let l:latest = l:paths.dir . '/' . l:filename
+  else
+    let l:latest = expand(g:llm_log_dir) . '/latest/' . l:filename
+  endif
 
   let @" = l:latest
   let @+ = l:latest
@@ -169,6 +176,8 @@ function! llm#log#tail(type) abort
       autocmd! * <buffer>
       autocmd FileChangedShellPost <buffer> normal! G
       autocmd BufWinLeave <buffer> call timer_stop(b:llm_tail_timer)
+      autocmd BufDelete <buffer> call timer_stop(b:llm_tail_timer)
+      autocmd BufWipeout <buffer> call timer_stop(b:llm_tail_timer)
     augroup END
     echom '[LLM] Tailing ' . l:type . ' log (auto-refreshing)'
   endif
