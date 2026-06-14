@@ -669,7 +669,7 @@ function! llm#run(...) abort
     endif
 
     " Append the LLM response line by line.
-    for l:line in split(a:output, "\n")
+    for l:line in split(substitute(a:output, "\r", '', 'g'), "\n")
       call append(l:last_line + 1, l:line)
       let l:last_line += 1
     endfor

@@ -184,7 +184,7 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   let l:job_opts = {
         \ 'in_io': 'null',
         \ 'out_cb': {channel, msg -> [add(l:output, msg), (g:llm_log_level !=# 'none' && !empty(l:log_paths) ? writefile([msg], l:log_paths.response, 'a') : 0), llm#debug('aichat.out_cb: Received ' . len(msg) . ' chars')]},
-        \ 'err_cb': {channel, msg -> [add(l:output, msg), llm#debug('aichat.err_cb: ' . msg)]},
+        \ 'err_cb': {channel, msg -> llm#debug('aichat.err_cb: ' . msg)},
         \ 'exit_cb': {job, status -> s:on_job_complete(l:job_id, l:output, l:temp_file, l:timer_id, status, a:callback)},
         \ 'out_mode': 'nl',
         \ }
@@ -312,7 +312,13 @@ function! s:on_job_complete(job_id, output, temp_file, timer_id, status, callbac
   call delete(a:temp_file)
   
   " Handle exit status
-  let l:result = join(a:output, "\n")
+  " Prefer the byte-faithful response log over reconstructed stdout chunks.
+  if has_key(l:job_info, 'log_paths') && !empty(l:job_info.log_paths)
+        \ && filereadable(l:job_info.log_paths.response)
+    let l:result = join(readfile(l:job_info.log_paths.response), "\n")
+  else
+    let l:result = join(a:output, "\n")
+  endif
   if a:status != 0
     let l:result = "ERROR (exit code " . a:status . "):\n" . l:result
   endif

@@ -39,6 +39,10 @@ endif
 if !exists('g:llm_log_level')
   let g:llm_log_level = 'info'
 endif
+" Logging is always enabled; 'none' is treated as 'info'.
+if g:llm_log_level ==# 'none'
+  let g:llm_log_level = 'info'
+endif
 
 " Cleanup: max log directories to keep (0 = unlimited)
 if !exists('g:llm_log_keep_count')
