@@ -149,6 +149,19 @@ function! llm#log#tail(type) abort
     let l:latest = expand(g:llm_log_dir) . '/latest/' . l:filename
   endif
 
+  " Guard: ensure the target file exists before tailing
+  if !filereadable(l:latest)
+    if has_key(l:paths, 'dir')
+      " Active request but file not yet created — touch it
+      call writefile([], l:latest)
+    else
+      echohl WarningMsg
+      echom '[LLM] No log file to tail: ' . l:latest . ' (run :LLM first)'
+      echohl None
+      return
+    endif
+  endif
+
   let @" = l:latest
   let @+ = l:latest
   if has('terminal')
@@ -164,7 +177,7 @@ function! llm#log#tail(type) abort
         endif
       endif
     endfor
-    execute 'botright terminal ++close tail -f ' . shellescape(l:latest)
+    execute 'botright terminal ++close tail -F ' . shellescape(l:latest)
     wincmd p
     echom '[LLM] Tailing ' . l:latest . ' (close terminal to stop)'
   else
