@@ -5,63 +5,40 @@ use_tools: code_assistant
 
 ## 0. Conversation Startup Protocol
 
-**MANDATORY — NEVER SKIP — Execute before generating ANY response content.**
+**MANDATORY — ONE tool call before generating ANY response content.**
 
 This protocol fires once: at the very first user message of a conversation.
-Complete ALL steps IN ORDER before writing any other output.
+Execute ONE `safe_script_executor` call, then emit its output as your first line.
 
-### Step 1: Memory Load + Transition Detection (Priority: HIGHEST)
+### The Call
 
-Execute the `@agent-memory` Auto-Load Protocol (§1 in skill):
-
-1. **Load core** (Tier 1): Read manifest or fallback to `ls ~/.config/aichat/memory/global/core/`
-2. **Detect transition**: CONTINUE | RESUME | RETURN | PIVOT | SWITCH | FIRST
-3. **Load project context** (Tier 2): Per transition type — heavier for RETURN/SWITCH, lighter for CONTINUE
-4. **Budget**: ≤8 tool calls total for Steps 1-3. Stop if exceeded.
-
-Full protocol spec (priority scoring, tier budgets, badge system): `@agent-memory` §1.
-
-### Step 2: Skills Warm (Priority: NORMAL)
-
-Call `skills` tool with `list_skills=true` — one tool call. Read returned skill names into awareness.
-
-### Step 3: Status Checkpoint + Returning Briefing (Priority: CRITICAL)
-
-**Your response MUST begin with a memory status line.** Format:
-
-```
-🧠 [core: N files loaded] | 📋 [project: N memories, {transition_qualifier}] | 🔧 [N skills available]
+```json
+{
+  "script": "$HOME/.config/aichat/functions/skills/memory/agent-memory/memory-startup.sh",
+  "prompt": "Load agent memory and project context at conversation start",
+  "allow_outside_cwd": true,
+  "dry_run": false,
+  "timeout": 10
+}
 ```
 
-Transition qualifiers:
-- CONTINUE: `[project: continuing]`
-- RESUME: `[project: N memories, resuming <topic>]`
-- RETURN: `[project: N memories, returning after <duration>]`
-- PIVOT: `[project: N memories, pivoting to <topic>]`
-- SWITCH: `[project: N memories for <project-name>]`
-- FIRST: `[new project — no memories yet]`
+### What It Does
 
-Failure variants:
-```
-🧠 ⚠️ No core memories found | 📋 [project: N memories] | 🔧 [N skills]
-🧠 [core: N files] | 📋 ⚠️ No project memories | 🔧 [N skills]
-🧠 ⚠️ Memory loading failed — operating without context | 🔧 [N skills]
-```
+1. Bootstraps missing memory directories (silent)
+2. Loads core memories from `$HOME/.config/aichat/memory/global/core/`
+3. Detects project (git root) and loads project memories
+4. Detects transition type (CONTINUE/RESUME/RETURN/FIRST)
+5. Returns formatted status line + briefing + memory content
 
-**After status line**: Emit returning briefing (variable depth per transition type):
-- CONTINUE: No briefing
-- RESUME: Quick reminder (2-4 lines: last state + next step + unresolved count)
-- RETURN: Full briefing (8-15 lines: changes + active work + unresolved + suggestions)
-- PIVOT: Topic switch note (3-5 lines: previous work + new context)
-- SWITCH: Project switch notification (1-2 lines)
-- FIRST: Setup guidance (2-3 lines)
+### Your Job
 
-**Rules**:
-- This status line is the FIRST LINE of your FIRST response. Nothing precedes it.
-- Emit it even if loading failed completely — the failure message IS the checkpoint.
-- After the status line + briefing, proceed with normal response to the user's message.
-- Subsequent messages in the same conversation do NOT repeat this line.
-- If the user's message is a skill invocation (`@skill-name`) or command (`/command`), the status line still appears first, THEN the skill/command response follows.
+1. Call `safe_script_executor` with the above params
+2. Emit the status line (first line of stdout) as your first response line
+3. Ingest any `=== CORE MEMORIES ===` or `=== IN-PROGRESS ===` sections as context (don't echo them)
+4. Call `skills` tool with `list_skills=true` for skill warming
+5. Proceed with normal response
+
+Total: 2 tool calls. Down from 3-8.
 
 ### Failure Recovery
 
