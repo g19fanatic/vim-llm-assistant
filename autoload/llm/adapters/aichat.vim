@@ -103,6 +103,15 @@ function! s:aichat_adapter.stop_job(job_id) abort
   return 1
 endfunction
 
+" Gate function: only fires completion when BOTH exit_cb and close_cb have fired.
+" This prevents the race where exit_cb reads response.md before all out_cb
+" calls have flushed the final lines.
+function! s:check_completion_gate(gate, job_id, output, temp_file, timer_id, callback) abort
+  if a:gate.exited && a:gate.closed
+    call s:on_job_complete(a:job_id, a:output, a:temp_file, a:timer_id, a:gate.status, a:callback)
+  endif
+endfunction
+
 " Async process with callback
 function! s:aichat_adapter.process_async(json_filename, prompt, model, callback) abort
   call llm#debug('aichat.process_async: ENTER')
@@ -165,6 +174,10 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   call llm#debug('aichat.process_async: Command=' . string(l:cmd_base))
   let l:output = []
   
+  " Dual-gate: completion fires only after BOTH exit_cb and close_cb.
+  " Prevents race where exit_cb reads response.md before final out_cb flushes.
+  let l:gate = {'exited': 0, 'closed': 0, 'status': 0}
+
   " Start status timer (before job callbacks to capture in closure)
   let l:timer_id = timer_start(2000, function('s:show_status_message'), {'repeat': -1})
   call llm#debug('aichat.process_async: Started timer_id=' . l:timer_id)
@@ -185,7 +198,8 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
         \ 'in_io': 'null',
         \ 'out_cb': {channel, msg -> [add(l:output, msg), (g:llm_log_level !=# 'none' && !empty(l:log_paths) ? writefile([msg], l:log_paths.response, 'a') : 0), llm#debug('aichat.out_cb: Received ' . len(msg) . ' chars')]},
         \ 'err_cb': {channel, msg -> llm#debug('aichat.err_cb: ' . msg)},
-        \ 'exit_cb': {job, status -> s:on_job_complete(l:job_id, l:output, l:temp_file, l:timer_id, status, a:callback)},
+        \ 'exit_cb': {job, status -> [extend(l:gate, {'exited': 1, 'status': status}), s:check_completion_gate(l:gate, l:job_id, l:output, l:temp_file, l:timer_id, a:callback)]},
+        \ 'close_cb': {channel -> [extend(l:gate, {'closed': 1}), s:check_completion_gate(l:gate, l:job_id, l:output, l:temp_file, l:timer_id, a:callback)]},
         \ 'out_mode': 'nl',
         \ }
   
