@@ -56,6 +56,35 @@ function! llm#log#complete_types(arglead, cmdline, cursorpos) abort
         \ 'v:val =~ "^" . a:arglead')
 endfunction
 
+" Resolve the request directory for :LLMLog and :LLMLogTail
+" Strategy: active requests (pick/prompt if >1) → last_request_dir fallback
+" Returns: directory path string, or '' if nothing available
+function! s:resolve_request_dir() abort
+  let l:requests = llm#get_active_requests()
+  if len(l:requests) == 1
+    return l:requests[0].dir
+  elseif len(l:requests) > 1
+    " Multiple active requests — let user pick
+    let l:choices = ['[LLM] Multiple active requests:']
+    let l:idx = 1
+    for l:req in l:requests
+      let l:label = l:idx . '. ' . l:req.model . ' (' . l:req.start_time . '): "' . l:req.prompt . '"'
+      call add(l:choices, l:label)
+      let l:idx += 1
+    endfor
+    let l:pick = inputlist(l:choices)
+    if l:pick < 1 || l:pick > len(l:requests)
+      " Default to most recent (last in list)
+      return l:requests[-1].dir
+    endif
+    return l:requests[l:pick - 1].dir
+  endif
+
+  " No active requests — fall back to most recently started dir
+  let l:last = llm#get_last_request_dir()
+  return l:last
+endfunction
+
 " Helper: focus existing window showing file, or vsplit it
 function! s:open_or_focus(file) abort
   let l:bufnr = bufnr(a:file)
@@ -96,14 +125,9 @@ function! llm#log#open(type) abort
     return
   endif
 
-  " Find latest request directory (prefer per-instance tracking over global symlink)
-  let l:paths = llm#get_current_log_paths()
-  if has_key(l:paths, 'dir')
-    let l:latest_dir = l:paths.dir
-  else
-    let l:latest_dir = expand(g:llm_log_dir) . '/latest'
-  endif
-  if !isdirectory(l:latest_dir)
+  " Find latest request directory (active requests → last_request_dir fallback)
+  let l:latest_dir = s:resolve_request_dir()
+  if empty(l:latest_dir)
     echom '[LLM] No log directories found in ' . g:llm_log_dir
     return
   endif
@@ -141,25 +165,19 @@ function! llm#log#tail(type) abort
   let l:filemap = {'response': 'response.md', 'aichat': 'aichat.log'}
   let l:filename = get(l:filemap, l:type, 'response.md')
 
-  " Resolve explicit log dir (same as :LLMLog), fall back to symlink
-  let l:paths = llm#get_current_log_paths()
-  if has_key(l:paths, 'dir')
-    let l:latest = l:paths.dir . '/' . l:filename
-  else
-    let l:latest = expand(g:llm_log_dir) . '/latest/' . l:filename
+  " Resolve request directory (active requests → last_request_dir fallback)
+  let l:request_dir = s:resolve_request_dir()
+  if empty(l:request_dir)
+    echohl WarningMsg
+    echom '[LLM] No log file to tail (run :LLM first)'
+    echohl None
+    return
   endif
+  let l:latest = l:request_dir . '/' . l:filename
 
-  " Guard: ensure the target file exists before tailing
+  " Touch file if missing so tail -F has something to follow
   if !filereadable(l:latest)
-    if has_key(l:paths, 'dir')
-      " Active request but file not yet created — touch it
-      call writefile([], l:latest)
-    else
-      echohl WarningMsg
-      echom '[LLM] No log file to tail: ' . l:latest . ' (run :LLM first)'
-      echohl None
-      return
-    endif
+    call writefile([], l:latest)
   endif
 
   let @" = l:latest

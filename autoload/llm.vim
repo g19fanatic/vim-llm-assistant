@@ -5,11 +5,27 @@ function! llm#debug(msg) abort
   endif
 endfunction
 
-" Current request's log paths (set in llm#run, read by adapters)
-let s:current_log_paths = {}
+" Request registry: tracks all active LLM requests and last-known dir
+let s:active_requests = []
+let s:last_request_dir = ''
 
+" Backward-compat shim: returns log_paths of the most recent active request
+" (used by aichat adapter at adapters/aichat.vim:134)
 function! llm#get_current_log_paths() abort
-  return s:current_log_paths
+  if !empty(s:active_requests)
+    return s:active_requests[-1].log_paths
+  endif
+  return {}
+endfunction
+
+" Return list of all active (running) requests
+function! llm#get_active_requests() abort
+  return s:active_requests
+endfunction
+
+" Return the directory of the most recently started request (persists after completion)
+function! llm#get_last_request_dir() abort
+  return s:last_request_dir
 endfunction
 
 
@@ -639,11 +655,20 @@ function! llm#run(...) abort
   call llm#debug('llm#run: JSON data size=' . len(l:json_data) . ' bytes, files=' . len(l:file_list))
   
   " Create log request dir if logging enabled
-  let s:current_log_paths = (g:llm_log_level !=# 'none') ? llm#log#create_request() : {}
+  let l:log_paths = (g:llm_log_level !=# 'none') ? llm#log#create_request() : {}
+
+  " Register this request in the active requests list
+  if !empty(l:log_paths)
+    let l:request_entry = {'dir': l:log_paths.dir, 'log_paths': l:log_paths,
+          \ 'model': l:model, 'prompt': strpart(l:prompt, 0, 60),
+          \ 'start_time': strftime('%H:%M:%S')}
+    call add(s:active_requests, l:request_entry)
+    let s:last_request_dir = l:log_paths.dir
+  endif
 
   " Write the JSON data to a file (persist at debug level, temp otherwise)
-  if g:llm_log_level ==# 'debug' && !empty(s:current_log_paths)
-    let l:tempfile = s:current_log_paths.input
+  if g:llm_log_level ==# 'debug' && !empty(l:log_paths)
+    let l:tempfile = l:log_paths.input
   else
     let l:tempfile = tempname()
   endif
@@ -683,11 +708,14 @@ function! llm#run(...) abort
     " Return focus to the previous window.
     wincmd p
     " Clean up temp file (skip if persisted as log input)
-    if g:llm_log_level ==# 'debug' && !empty(s:current_log_paths)
+    if g:llm_log_level ==# 'debug' && !empty(l:log_paths)
       " Input JSON already at its final log path — don't delete
     else
       call delete(l:tempfile)
     endif
+
+    " Deregister this request from active list
+    call filter(s:active_requests, 'v:val.dir !=# l:log_paths.dir')
     
     call llm#debug('OnLLMComplete: EXIT (buffer operations complete)')
     echom '[LLM] Complete!'
