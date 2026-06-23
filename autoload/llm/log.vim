@@ -183,10 +183,11 @@ function! llm#log#tail(type) abort
   let @" = l:latest
   let @+ = l:latest
   if has('terminal')
-    " Check if we already have a terminal tailing this file
-    let l:tail_pattern = 'tail.*' . escape(l:filename, '.')
+    " Check if we already have a terminal tailing this exact file.
+    " Use full path in term_name to distinguish different request directories.
+    let l:term_name = 'tail: ' . l:latest
     for l:buf in term_list()
-      if bufname(l:buf) =~# l:tail_pattern
+      if bufname(l:buf) ==# l:term_name
         let l:win = bufwinnr(l:buf)
         if l:win != -1
           execute l:win . 'wincmd w'
@@ -195,7 +196,14 @@ function! llm#log#tail(type) abort
         endif
       endif
     endfor
-    execute 'botright terminal ++close tail -F ' . shellescape(l:latest)
+    " Use term_start() with a List command to execute tail directly without
+    " a shell. This avoids shellescape() quoting issues — when Vim's :terminal
+    " doesn't invoke a shell, shell-escaped quotes become literal characters
+    " in the filename, causing tail to fail on a non-existent path.
+    botright call term_start(['tail', '-F', l:latest], {
+          \ 'term_finish': 'close',
+          \ 'term_name': l:term_name,
+          \ })
     wincmd p
     echom '[LLM] Tailing ' . l:latest . ' (close terminal to stop)'
   else
