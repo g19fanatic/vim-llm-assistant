@@ -139,7 +139,13 @@ function! llm#log#open(type) abort
   let l:file = l:latest_dir . '/' . l:filename
 
   if !filereadable(l:file)
-    echom '[LLM] File not found: ' . l:file
+    if (l:type ==# 'input' || l:type ==# 'aichat') && g:llm_log_level !=# 'debug'
+      echohl WarningMsg
+      echom '[LLM] ' . l:type . ' log requires debug level. Set g:llm_log_level=''debug'' in your vimrc or use :LLMLogDebug'
+      echohl None
+    else
+      echom '[LLM] File not found: ' . l:file
+    endif
     return
   endif
 
@@ -159,21 +165,27 @@ function! llm#log#browse() abort
 endfunction
 
 " Tail the current/latest response log in a terminal split
-" Usage: :LLMLogTail [response|aichat]
+" Usage: :LLMLogTail [response|aichat|tools|session]
 function! llm#log#tail(type) abort
   let l:type = empty(a:type) ? 'response' : a:type
-  let l:filemap = {'response': 'response.md', 'aichat': 'aichat.log'}
-  let l:filename = get(l:filemap, l:type, 'response.md')
 
-  " Resolve request directory (active requests → last_request_dir fallback)
-  let l:request_dir = s:resolve_request_dir()
-  if empty(l:request_dir)
-    echohl WarningMsg
-    echom '[LLM] No log file to tail (run :LLM first)'
-    echohl None
-    return
+  " Session log is at root level, not per-request
+  if l:type ==# 'session'
+    let l:latest = llm#log#dir() . '/session.log'
+  else
+    let l:filemap = {'response': 'response.md', 'aichat': 'aichat.log', 'tools': 'tools.log'}
+    let l:filename = get(l:filemap, l:type, 'response.md')
+
+    " Resolve request directory (active requests → last_request_dir fallback)
+    let l:request_dir = s:resolve_request_dir()
+    if empty(l:request_dir)
+      echohl WarningMsg
+      echom '[LLM] No log file to tail (run :LLM first)'
+      echohl None
+      return
+    endif
+    let l:latest = l:request_dir . '/' . l:filename
   endif
-  let l:latest = l:request_dir . '/' . l:filename
 
   " Touch file if missing so tail -F has something to follow
   if !filereadable(l:latest)
@@ -265,4 +277,119 @@ function! llm#log#startup_cleanup() abort
     return
   endif
   silent call llm#log#clean('')
+endfunction
+
+" Toggle log level between 'info' and 'debug' at runtime
+" Usage: :LLMLogDebug
+function! llm#log#toggle_debug() abort
+  if g:llm_log_level ==# 'debug'
+    let g:llm_log_level = 'info'
+  else
+    let g:llm_log_level = 'debug'
+  endif
+  echom '[LLM] Log level: ' . g:llm_log_level
+endfunction
+
+" Browse past request directories with metadata from session.log
+" Usage: :LLMLogHistory [N]  (default: 10)
+function! llm#log#history(count) abort
+  let l:count = empty(a:count) ? 10 : str2nr(a:count)
+  let l:dir = llm#log#dir()
+
+  " Get all request directories (match YYYYMMDD_HHMMSS_NNN pattern)
+  let l:dirs = glob(l:dir . '/[0-9]*_[0-9]*_[0-9]*', 0, 1)
+
+  if empty(l:dirs)
+    echom '[LLM] No request directories found in ' . g:llm_log_dir
+    return
+  endif
+
+  " Sort reverse (newest first) and take N
+  call sort(l:dirs)
+  call reverse(l:dirs)
+  let l:dirs = l:dirs[:l:count - 1]
+
+  " Read session.log and build lookup by timestamp
+  let l:session_file = l:dir . '/session.log'
+  let l:session_map = {}
+  if filereadable(l:session_file)
+    for l:line in readfile(l:session_file)
+      " Format: 'YYYY-MM-DD HH:MM:SS | model | duration | status | prompt'
+      let l:ts = matchstr(l:line, '^\d\{4}-\d\{2}-\d\{2} \d\{2}:\d\{2}:\d\{2}')
+      if !empty(l:ts)
+        let l:session_map[l:ts] = l:line
+      endif
+    endfor
+  endif
+
+  " Build display list
+  let l:choices = ['[LLM] Recent requests (newest first):']
+  let l:idx = 1
+  for l:d in l:dirs
+    let l:name = fnamemodify(l:d, ':t')
+    " Convert dirname YYYYMMDD_HHMMSS_NNN to YYYY-MM-DD HH:MM:SS
+    let l:ts = l:name[0:3] . '-' . l:name[4:5] . '-' . l:name[6:7]
+          \ . ' ' . l:name[9:10] . ':' . l:name[11:12] . ':' . l:name[13:14]
+
+    " Look up session.log entry for this timestamp
+    let l:info = ''
+    if has_key(l:session_map, l:ts)
+      let l:parts = split(l:session_map[l:ts], ' | ')
+      if len(l:parts) >= 5
+        let l:model = l:parts[1]
+        let l:prompt = join(l:parts[4:], ' | ')[:50]
+        let l:info = l:model . ' | ' . l:prompt
+      elseif len(l:parts) >= 2
+        let l:info = l:parts[1]
+      endif
+    endif
+
+    let l:label = l:idx . '. ' . l:ts
+    if !empty(l:info)
+      let l:label .= ' | ' . l:info
+    endif
+    call add(l:choices, l:label)
+    let l:idx += 1
+  endfor
+
+  " Let user pick
+  let l:pick = inputlist(l:choices)
+  if l:pick < 1 || l:pick > len(l:dirs)
+    return
+  endif
+
+  " Open selected directory in netrw
+  let l:selected = l:dirs[l:pick - 1]
+  execute 'edit ' . fnameescape(l:selected)
+endfunction
+
+" Search session.log for a pattern and populate quickfix list
+" Usage: :LLMLogSearch <pattern>
+function! llm#log#search(pattern) abort
+  let l:logfile = llm#log#dir() . '/session.log'
+  if !filereadable(l:logfile)
+    echom '[LLM] session.log not found — no requests logged yet'
+    return
+  endif
+
+  let l:results = systemlist('grep -n ' . shellescape(a:pattern) . ' ' . shellescape(l:logfile))
+  if empty(l:results)
+    echom '[LLM] No matches for: ' . a:pattern
+    return
+  endif
+
+  " Build quickfix entries from grep output (format: linenum:content)
+  let l:qflist = []
+  for l:line in l:results
+    let l:colon = stridx(l:line, ':')
+    if l:colon > 0
+      let l:lnum = str2nr(l:line[:l:colon - 1])
+      let l:text = l:line[l:colon + 1:]
+      call add(l:qflist, {'filename': l:logfile, 'lnum': l:lnum, 'text': l:text})
+    endif
+  endfor
+
+  call setqflist(l:qflist)
+  copen
+  echom '[LLM] ' . len(l:qflist) . ' match(es) for: ' . a:pattern
 endfunction

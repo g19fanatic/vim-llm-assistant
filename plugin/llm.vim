@@ -39,10 +39,6 @@ endif
 if !exists('g:llm_log_level')
   let g:llm_log_level = 'info'
 endif
-" Logging is always enabled; 'none' is treated as 'info'.
-if g:llm_log_level ==# 'none'
-  let g:llm_log_level = 'info'
-endif
 
 " Cleanup: max log directories to keep (0 = unlimited)
 if !exists('g:llm_log_keep_count')
@@ -87,6 +83,9 @@ command! -nargs=? -complete=customlist,llm#log#complete_types LLMLog call llm#lo
 command! LLMLogDir call llm#log#browse()
 command! -nargs=? LLMLogTail call llm#log#tail(<q-args>)
 command! -nargs=? LLMLogClean call llm#log#clean(<q-args>)
+command! -nargs=0 LLMLogDebug call llm#log#toggle_debug()
+command! -nargs=? LLMLogHistory call llm#log#history(<q-args>)
+command! -nargs=1 LLMLogSearch call llm#log#search(<q-args>)
 
 " Run log cleanup at startup (non-blocking)
 if exists('g:llm_log_level') && g:llm_log_level !=# 'none'
