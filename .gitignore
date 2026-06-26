@@ -4,3 +4,4 @@
 # Agent memory (personal, not version-controlled)
 memory/
 *~
+*.pyc
