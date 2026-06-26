@@ -9,6 +9,9 @@ endfunction
 let s:active_requests = []
 let s:last_request_dir = ''
 
+" Cursor position at time of last llm#run() call (passed to adapter via env vars)
+let s:last_cursor_pos = [0, 0]
+
 " Backward-compat shim: returns log_paths of the most recent active request
 " (used by aichat adapter at adapters/aichat.vim:134)
 function! llm#get_current_log_paths() abort
@@ -28,6 +31,11 @@ function! llm#get_last_request_dir() abort
   return s:last_request_dir
 endfunction
 
+" Return cursor position from the most recently started llm#run() call
+function! llm#get_cursor_pos() abort
+  return s:last_cursor_pos
+endfunction
+
 
 " Helper: JSON encoding wrapper.
 " For llm#run context payloads, enforce deterministic top-level key order
@@ -36,17 +44,16 @@ function! llm#encode(obj) abort
   if type(a:obj) == type({})
     let l:ordered_keys = [
           \ 'llm_history',
+          \ 'llm_history_turns',
           \ 'buffers',
-          \ 'active_buffer',
           \ 'file_arguments',
+          \ 'active_buffer',
           \ 'prompt',
-          \ 'cursor_line',
-          \ 'cursor_col',
+          \ '_cache_hints',
           \ ]
 
     " Only apply ordered top-level emission for the llm#run context shape.
     if has_key(a:obj, 'buffers') && has_key(a:obj, 'active_buffer')
-          \ && has_key(a:obj, 'cursor_line') && has_key(a:obj, 'cursor_col')
       let l:parts = []
       let l:seen = {}
 
@@ -74,6 +81,68 @@ function! llm#encode(obj) abort
   endif
 
   return json_encode(a:obj)
+endfunction
+
+" Parse [LLM-Scratch] buffer history into structured turn array.
+" Each turn is a dict: {'timestamp': '...', 'user': '...', 'assistant': '...'}
+" The scratch buffer format is:
+"   ==== <timestamp> ====
+"   Prompt: <user message>
+"   <assistant response lines...>
+"   <blank line>
+" Returns: List of turn dicts (empty list if no scratch buffer or no turns)
+function! llm#parse_history_turns() abort
+  if !exists('g:llm_scratch_bufnr') || !bufexists(g:llm_scratch_bufnr)
+    return []
+  endif
+
+  let l:lines = getbufline(g:llm_scratch_bufnr, 1, '$')
+  let l:turns = []
+  let l:current_turn = {}
+  let l:collecting = ''
+  let l:content = []
+
+  for l:line in l:lines
+    if l:line =~# '^==== .* ====$'
+      " Save previous turn if exists
+      if !empty(l:current_turn)
+        if l:collecting ==# 'assistant' && !empty(l:content)
+          let l:current_turn.assistant = s:trim_blank_lines(join(l:content, "\n"))
+        endif
+        call add(l:turns, l:current_turn)
+      endif
+      " Start new turn
+      let l:timestamp = matchstr(l:line, '^==== \zs.*\ze ====$')
+      let l:current_turn = {'timestamp': l:timestamp, 'user': '', 'assistant': ''}
+      let l:content = []
+      let l:collecting = ''
+    elseif l:line =~# '^Prompt: ' && !empty(l:current_turn) && l:collecting ==# ''
+      let l:current_turn.user = l:line[8:]
+      let l:collecting = 'assistant'
+      let l:content = []
+    else
+      if l:collecting ==# 'assistant'
+        call add(l:content, l:line)
+      endif
+    endif
+  endfor
+
+  " Don't forget last turn
+  if !empty(l:current_turn)
+    if l:collecting ==# 'assistant' && !empty(l:content)
+      let l:current_turn.assistant = s:trim_blank_lines(join(l:content, "\n"))
+    endif
+    call add(l:turns, l:current_turn)
+  endif
+
+  return l:turns
+endfunction
+
+" Helper: trim leading and trailing blank lines from a string
+function! s:trim_blank_lines(text) abort
+  let l:result = substitute(a:text, '^\n\+', '', '')
+  let l:result = substitute(l:result, '\n\+$', '', '')
+  return l:result
 endfunction
 
 " Helper: Open or reuse a global scratch buffer for LLM responses
@@ -624,11 +693,21 @@ function! llm#run(...) abort
   "   3. active_buffer  — stable most of the time
   "   4. file_arguments — stable per session
   "   5. prompt         — changes per request
-  "   6. cursor_line    — changes constantly (small)
-  "   7. cursor_col     — changes constantly (small)
+  "   Note: cursor_line/cursor_col removed from JSON — passed via env vars
+  "   (AICHAT_CURSOR_LINE, AICHAT_CURSOR_COL) for cache prefix stability.
   let l:data = {}
 
-  if exists('g:llm_scratch_bufnr')
+  " Structured history turns (parsed from scratch buffer).
+  let l:history_turns = llm#parse_history_turns()
+  if !empty(l:history_turns)
+    let l:data.llm_history_turns = l:history_turns
+  endif
+
+  " Add flat history text (legacy). When g:llm_multiturn_mode is 1 and
+  " structured turns are available, skip flat history to avoid redundancy
+  " and save tokens — the backend uses llm_history_turns directly.
+  let l:skip_flat_history = get(g:, 'llm_multiturn_mode', 0) && !empty(l:history_turns)
+  if exists('g:llm_scratch_bufnr') && !l:skip_flat_history
     let l:data.llm_history = join(getbufline(g:llm_scratch_bufnr, 1, '$'), "\n")
   endif
 
@@ -646,8 +725,17 @@ function! llm#run(...) abort
     let l:data.prompt = l:prompt
   endif
 
-  let l:data.cursor_line = l:cursor_line
-  let l:data.cursor_col  = l:cursor_col
+  " Cache optimization hints for the aichat consumer.
+  " Tells the backend where to place cache breakpoints and which fields
+  " are stable vs dynamic across sequential requests.
+  let l:data._cache_hints = {
+        \ 'breakpoint_after': ['llm_history', 'buffers'],
+        \ 'stable_fields': ['llm_history', 'buffers', 'file_arguments'],
+        \ 'dynamic_fields': ['prompt'],
+        \ }
+
+  " Store cursor position for adapter to pass as env vars
+  let s:last_cursor_pos = [l:cursor_line, l:cursor_col]
 
   " Convert the data dictionary to JSON.
   let l:json_data = llm#encode(l:data)
@@ -729,6 +817,89 @@ function! llm#run(...) abort
   " Capture tmux window name at kick-off time so notify func can use it later
   let l:tmux_window = !empty($TMUX) ? substitute(system('tmux display-message -p "#W"'), '\n\+$', '', '') : ''
   call llm#process_async(l:tempfile, l:prompt, l:model, function('OnLLMComplete'))
+endfunction
+
+" Warm the Anthropic cache with current context (no output generated).
+" Builds context exactly as llm#run() but signals aichat to use max_tokens:1
+" and suppresses normal output. Reports cache_creation metrics on completion.
+function! llm#warm_cache() abort
+  call llm#debug('llm#warm_cache: ENTER')
+
+  " Get the current window's cursor location (for env vars).
+  let l:cursor_line = line('.')
+  let l:cursor_col  = col('.')
+
+  " Get a list of buffer numbers in the current tab.
+  let l:buf_list = tabpagebuflist(tabpagenr())
+
+  " Get the currently active buffer number.
+  let l:active_bufnr = bufnr('%')
+
+  " Build buffer list (same logic as llm#run).
+  let l:buffers = []
+  for l:bufnr in l:buf_list
+    if l:bufnr == l:active_bufnr
+      continue
+    endif
+    if (exists('g:llm_scratch_bufnr') && l:bufnr == g:llm_scratch_bufnr) || (exists('g:llm_snippet_bufnr') && l:bufnr == g:llm_snippet_bufnr)
+      continue
+    endif
+    let l:filename = bufname(l:bufnr)
+    if empty(l:filename)
+      let l:filename = "[No Name]"
+    endif
+    let l:contents = llm#get_buffer_content(l:bufnr, l:filename)
+    call add(l:buffers, {'filename': l:filename, 'contents': l:contents})
+  endfor
+
+  " Gather active buffer details.
+  let l:active_filename = bufname(l:active_bufnr)
+  if exists('g:llm_scratch_bufnr') && l:active_bufnr == g:llm_scratch_bufnr
+    let l:active_contents = ''
+  else
+    let l:active_contents = llm#get_buffer_content(l:active_bufnr, l:active_filename)
+  endif
+
+  " Assemble the data dictionary (same structure as llm#run).
+  let l:data = {}
+
+  if exists('g:llm_scratch_bufnr')
+    let l:data.llm_history = join(getbufline(g:llm_scratch_bufnr, 1, '$'), "\n")
+  endif
+
+  let l:history_turns = llm#parse_history_turns()
+  if !empty(l:history_turns)
+    let l:data.llm_history_turns = l:history_turns
+  endif
+
+  let l:data.buffers = l:buffers
+  let l:data.active_buffer = {
+        \ 'filename': l:active_filename,
+        \ 'contents': l:active_contents,
+        \ }
+
+  " Minimal prompt — signals intent without adding dynamic content.
+  let l:data.prompt = 'cache warm'
+
+  " Cache hints and warm signal.
+  let l:data._cache_hints = {
+        \ 'breakpoint_after': ['llm_history', 'buffers'],
+        \ 'stable_fields': ['llm_history', 'buffers', 'file_arguments'],
+        \ 'dynamic_fields': ['prompt'],
+        \ }
+  let l:data._cache_warm = 1
+
+  " Store cursor position for adapter env vars.
+  let s:last_cursor_pos = [l:cursor_line, l:cursor_col]
+
+  " Encode and write to tempfile.
+  let l:json_data = llm#encode(l:data)
+  let l:tempfile = tempname()
+  call writefile(split(l:json_data, "\n"), l:tempfile)
+
+  " Fire async with a lightweight callback (no scratch buffer write).
+  echom '[LLM] Cache warming...'
+  call llm#process_async(l:tempfile, 'cache warm', '', {output -> execute("echom '[LLM] Cache warmed (' . len(output) . ' bytes)' | call delete('" . l:tempfile . "')", '')})
 endfunction
 
 " Ensure session directory exists

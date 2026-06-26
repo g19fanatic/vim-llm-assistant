@@ -147,6 +147,7 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   
   " Check if the JSON contains file_arguments
   let l:file_flags = ''
+  let l:multiturn_env = ''
   if filereadable(a:json_filename)
     let l:json_lines = readfile(a:json_filename)
     let l:json_data = json_decode(join(l:json_lines, "\n"))
@@ -155,6 +156,11 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
       for l:file in l:json_data.file_arguments
         let l:file_flags .= '-f ' . shellescape(l:file) . ' '
       endfor
+    endif
+
+    " Signal multi-turn readiness when structured history turns are present
+    if has_key(l:json_data, 'llm_history_turns') && !empty(l:json_data.llm_history_turns)
+      let l:multiturn_env = 'AICHAT_MULTITURN_READY=1 '
     endif
   endif
   
@@ -165,7 +171,11 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
   if g:llm_log_level ==# 'debug' && has_key(l:log_paths, 'aichat')
     let l:aichat_log_env = 'AICHAT_LOG_PATH=' . shellescape(l:log_paths.aichat) . ' AICHAT_LOG_LEVEL=debug '
   endif
-  let l:cmd_base = ['bash', '-c', l:cmd_extra . l:aichat_log_env . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename)]
+  " Pass cursor position as env vars (removed from JSON for cache stability)
+  let l:cursor_pos = llm#get_cursor_pos()
+  let l:cursor_env = 'AICHAT_CURSOR_LINE=' . l:cursor_pos[0] . ' AICHAT_CURSOR_COL=' . l:cursor_pos[1] . ' '
+
+  let l:cmd_base = ['bash', '-c', l:cmd_extra . l:aichat_log_env . l:cursor_env . l:multiturn_env . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename)]
   if !empty(a:prompt)
     let l:cmd_base[2] .= ' -- ' . shellescape(a:prompt)
   endif
@@ -263,6 +273,7 @@ function! s:aichat_adapter.process(json_filename, prompt, model) abort
   
   " Check if the JSON contains file_arguments
   let l:file_flags = ''
+  let l:multiturn_env = ''
   if filereadable(a:json_filename)
     let l:json_lines = readfile(a:json_filename)
     let l:json_data = json_decode(join(l:json_lines, "\n"))
@@ -273,13 +284,22 @@ function! s:aichat_adapter.process(json_filename, prompt, model) abort
         let l:file_flags .= '-f ' . shellescape(l:file) . ' '
       endfor
     endif
+
+    " Signal multi-turn readiness when structured history turns are present
+    if has_key(l:json_data, 'llm_history_turns') && !empty(l:json_data.llm_history_turns)
+      let l:multiturn_env = 'AICHAT_MULTITURN_READY=1 '
+    endif
   endif
   
   " Construct command with file flags before the main --file flag
+  " Pass cursor position as env vars (removed from JSON for cache stability)
+  let l:cursor_pos = llm#get_cursor_pos()
+  let l:cursor_env = 'AICHAT_CURSOR_LINE=' . l:cursor_pos[0] . ' AICHAT_CURSOR_COL=' . l:cursor_pos[1] . ' '
+
   if empty(a:prompt)
-    let l:cmd = 'bash -c ' . shellescape(l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename))
+    let l:cmd = 'bash -c ' . shellescape(l:cmd_extra . l:cursor_env . l:multiturn_env . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename))
   else
-    let l:cmd = 'bash -c ' . shellescape(l:cmd_extra . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename) . ' -- ' . shellescape(a:prompt))
+    let l:cmd = 'bash -c ' . shellescape(l:cmd_extra . l:cursor_env . l:multiturn_env . 'LLM_OUTPUT=' . shellescape(l:temp_file) . ' aichat --role ' . g:llm_role . ' --model ' . l:model . ' ' . l:file_flags . '--file ' . shellescape(a:json_filename) . ' -- ' . shellescape(a:prompt))
   endif
 
   " Execute aichat and get the standard response

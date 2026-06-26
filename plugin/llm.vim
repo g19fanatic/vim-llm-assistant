@@ -68,6 +68,8 @@ command! -nargs=+ -complete=file LLMFile call llm#run_with_files(<q-args>)
 command! -nargs=? -complete=customlist,llm#complete_models SetLLMModel call llm#set_default_model(<q-args>)
 command! -nargs=? -complete=customlist,llm#complete_adapters SetLLMAdapter call llm#set_default_adapter(<q-args>)
 
+command! LLMWarm call llm#warm_cache()
+
 command! -range -nargs=? LLMSnip call llm#add_snippet()
 command! ViewLLMSnippets call llm#open_snippet_buffer()
 command! ClearLLMSnippets call llm#clear_snippet_buffer()
