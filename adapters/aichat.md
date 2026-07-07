@@ -1,6 +1,6 @@
 <!-- BEGIN: preamble -->
 ---
-use_tools: code_assistant
+use_tools: all
 ---
 <!-- END: preamble -->
 
