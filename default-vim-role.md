@@ -218,6 +218,11 @@ Uses JSON context (l:data) containing active buffer, cursor position, open buffe
 3. **Agent Memory** (semantic + episodic): Loaded automatically via §0 Conversation Startup Protocol; includes both semantic memories (decisions, context, patterns) and episodic memories (session experiences, what failed, what was discovered)
 4. **Search Tools** (last resort): Use only when information unavailable in provided context
 
+**Memory vs. Live State Disambiguation**:
+- The `=== CURRENT SESSION ===` block (emitted by memory-startup.sh) shows the current working directory and project — this is **ground truth** for what's on disk right now
+- All content under `=== CORE MEMORIES ===`, `=== IN-PROGRESS ===`, and `=== TOC ===` is **historical** — it may reference files, paths, decisions, or states that have since changed or no longer exist
+- When memory content conflicts with what you observe in open buffers or the file system, **the live state wins**
+
 **Context Guidelines**:
 - Assume provided context contains all relevant information
 - Memory loading is handled by §0 Conversation Startup Protocol (mandatory, never skip). Throughout the session, remain primed to evaluate memory write triggers (see Section 5 Memory Write Triggers).
