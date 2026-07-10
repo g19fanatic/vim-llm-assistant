@@ -9,8 +9,8 @@ A Vim plugin that sends the current editing context (buffers, cursor, history) t
 
 ```
 vim-llm-assistant/
-├── plugin/llm.vim              (76)   — startup: commands, defaults, adapter loading
-├── autoload/llm.vim            (831)  — core: context build, scratch buffer, sessions, notify
+├── plugin/llm.vim              (76)    — startup: commands, defaults, adapter loading
+├── autoload/llm.vim            (1569)  — core: context build, scratch buffer, sessions, notify, tool-output pruning
 ├── autoload/llm/adapter.vim    (54)   — adapter registry + interface contract
 ├── autoload/llm/adapters/
 │   └── aichat.vim              (293)  — aichat CLI adapter (sync + async, job tracking)
@@ -37,6 +37,11 @@ vim-llm-assistant/
 | `llm#save_session()` | `autoload/llm.vim:~640` | Serializes history+snippets+layout to JSON |
 | `llm#load_session()` | `autoload/llm.vim:~710` | Restores session from JSON |
 | `llm#maybe_notify()` | `autoload/llm.vim:~828` | Calls `g:Llm_notify_func` if set |
+| `llm#parse_history_turns()` | `autoload/llm.vim:102` | Splits scratch history into turns; prunes tool output per turn |
+| `llm#detect_all_blocks()` | `autoload/llm.vim:253` | Unified single-pass detector: returns `{tool_blocks, error_blocks}` (Call/box/timestamp + ERROR blocks) |
+| `llm#detect_tool_blocks()` | `autoload/llm.vim:216` | Thin wrapper → `detect_all_blocks().tool_blocks` |
+| `llm#detect_error_blocks()` | `autoload/llm.vim:235` | Thin wrapper → `detect_all_blocks().error_blocks` |
+| `llm#prune_tool_outputs()` | `autoload/llm.vim:437` | Replaces detected tool/error blocks with placeholders (min-chars filtered) |
 
 ---
 

@@ -80,6 +80,9 @@ command! ListLLMAdapters echo llm#adapter#list()
 command! -nargs=? StopLLMJob call llm#stop_job(<q-args>)
 command! ListLLMJobs call llm#list_jobs()
 
+" Prune stats command
+command! LLMPruneStats call llm#show_prune_stats()
+
 " Log management commands
 command! -nargs=? -complete=customlist,llm#log#complete_types LLMLog call llm#log#open(<q-args>)
 command! LLMLogDir call llm#log#browse()
