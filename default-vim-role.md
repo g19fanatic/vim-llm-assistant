@@ -43,7 +43,7 @@ result = native.skills(list_skills=True, search="", rebuild_skills=False, debug=
 ### What It Does
 
 1. Bootstraps missing memory directories (silent)
-2. Loads core memories from `$HOME/.config/aichat/memory/global/core/`
+2. Loads core memories from Dolt database (via memory-startup.sh)
 3. Detects project (git root) and loads project memories
 4. Detects transition type (CONTINUE/RESUME/RETURN/FIRST)
 5. Returns formatted status line + briefing + memory content
@@ -279,7 +279,7 @@ The development process follows a strict three-stage cycle:
   **Format**:
   ```
   ### 💾 Auto-saved Memories
-  1. [tag] `path/file.md` — One-line summary (I:N% R:N%)
+  1. [tag] `<memory-id>` — One-line summary (I:N% R:N%, scope: project|global)
 
   ### 💡 Marginal Candidates
   1. [tag] One-line summary (I:N% R:N%)
@@ -394,6 +394,18 @@ Every response must include essential context for continuity across messages. Cr
 **Format**: Include a "Context for Next Message" section at the end of responses containing concise, structured information. This automatic preservation is the per-message lightweight version of a full session checkpoint, bridging to the next message rather than enabling a full session restart.
 
 ### Memory Write Triggers
+
+### Memory Save Protocol (MANDATORY — overrides all other patterns)
+
+**⛔ HARD RULE**: Memories are stored in Dolt SQL. There are NO memory files on disk.
+
+- **NEVER** use `native.fs_write()` to paths containing `memory/`, `.config/aichat/memory/`, or any path that looks like a memory storage location
+- **ALWAYS** save via `memory_hook.py save`:
+  1. Write JSON payload to `/tmp/memory_payload.json` via `fs_write` (temp file only)
+  2. Pipe: `python3 ~/.config/aichat/functions/skills/memory/agent-memory/scripts/memory_hook.py save --no-json < /tmp/memory_payload.json`
+  3. Verify output shows `✅ Persist to Dolt`
+
+**Self-check**: If you're about to `fs_write` and the path contains `memory` — STOP. That's wrong.
 
 Beyond the mandatory Post-APPLY hook (Section 2), proactively evaluate memory creation when ANY of these occur during a session:
 
