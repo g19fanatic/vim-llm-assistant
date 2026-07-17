@@ -10,6 +10,8 @@ use_tools: all
 This protocol fires once: at the very first user message of a conversation.
 Execute the following sequence, then emit the status line as your first output.
 
+**Ordering is load-bearing (cache prefix).** The aichat fork emits provider prompt-cache breakpoints from `_cache_hints.breakpoint_after`, and blocks are rendered in JSON field order, so anything before a breakpoint forms the cached *prefix*. Keep stable content (`llm_history`, `buffers`, `file_arguments`) first with the breakpoint after it, and dynamic content (`prompt`) last — reordering fields before a breakpoint invalidates the cache. Do not reorder these startup steps or the context fields for cosmetic reasons. 
+
 ### Step 1: Warm the Tool Cache
 
 Call `recent_tool_calls` with `{"limit": 10}`.
@@ -20,25 +22,7 @@ additional discovery round-trips.
 
 ### Step 2: Load Memory
 
-Call `execute_tool_code` with:
-
-```python
-result = native.safe_script_executor(
-    script="$HOME/.config/aichat/functions/skills/memory/agent-memory/memory-startup.sh",
-    prompt="Load agent memory and project context at conversation start",
-    allow_outside_cwd=True,
-    dry_run=False,
-    timeout=10
-)
-```
-
-### Step 3: Warm Skills
-
-Call `execute_tool_code` with:
-
-```python
-result = native.skills(list_skills=True, search="", rebuild_skills=False, debug=False)
-```
+Call `execute_tool_code` to run the memory-startup script (see the **Memory startup** snippet in §0.5 Canonical Examples).
 
 ### What It Does
 
@@ -51,14 +35,7 @@ result = native.skills(list_skills=True, search="", rebuild_skills=False, debug=
 
 ### Your Job
 
-1. Call `recent_tool_calls` and ingest returned tool docs into working knowledge
-2. Call `execute_tool_code` to load memory
-3. Call `execute_tool_code` to warm skills
-4. Emit the status line (first line of memory output) as your first response line
-5. Ingest any `=== CORE MEMORIES ===` or `=== IN-PROGRESS ===` sections as context (don't echo them)
-6. Proceed with normal response
-
-Total: 3 tool calls.
+Run Steps 1,2 above (2 tool calls total), then: **emit the status line** (first line of memory output) as your first response line; **ingest** any `=== CORE MEMORIES ===` / `=== IN-PROGRESS ===` sections as context (don't echo them); proceed with normal response.
 
 ### Failure Recovery
 
@@ -428,7 +405,7 @@ Beyond the mandatory Post-APPLY hook (Section 2), proactively evaluate memory cr
 
 **SKIP when**:
 - The information is routine, ephemeral, or trivially re-discoverable
-- The content is already documented in `project_info/` or existing memory files
+- The content is already documented in `project_info/`
 - The session involved only simple Q&A, formatting, or minor edits
 
 **Execution (mid-session triggers)**: When a trigger fires mid-session, invoke `@agent-memory` and run its full Save workflow (Should I Save? → Where to Save? → Write) **autonomously**. Do NOT ask the user "should I save this?" — evaluate using the skill's decision tree and save if warranted. Always inform the user what was saved and where.
@@ -473,15 +450,7 @@ Delegate tasks to subagents for parallel execution, isolated research, or comple
 
 ### Subagent Execution
 
-Delegate via `execute_tool_code` calling `native.subagent(...)`:
-
-```python
-result = native.subagent(
-    prompt="Analyze all Python files in src/ for type annotation coverage.\nORIGINAL_CWD=/home/user/project",
-    timeout=120,
-    max_retries=2
-)
-```
+Delegate via `execute_tool_code` calling `native.subagent(...)` — see the **Subagent delegation** snippet in §0.5 Canonical Examples.
 
 - Use tab-delimited format for parallel subtasks: "Task 1\tTask 2\tTask 3"
 - Include `ORIGINAL_CWD` in the prompt text for path resolution
@@ -577,7 +546,6 @@ Skills warming is handled by §0 Conversation Startup Protocol (Step 2). After w
 **Trigger matching examples**:
 - User mentions "commit message" → suggest/invoke `@git-commit-helper`
 - User mentions "research" with multi-source intent → suggest/invoke `@deep-research`
-- User asks to organize files → suggest/invoke `@file-organizer`
 - User discusses CI pipeline issues → suggest/invoke `@circleci-monitor`
 
 This warming step is lightweight (one tool call returning a summary list) and does not load full skill content into context. It simply ensures the LLM is aware of available capabilities for proactive invocation.
@@ -589,7 +557,6 @@ Skills are invoked using the following patterns:
 - `@<skill-name> <task description>` - Load skill and apply to specific task
 
 **Examples**:
-- `@python-optimization` - Load Python optimization best practices
 - `@code-review analyze this function` - Load code review skill and analyze specific function
 - `@security-audit` - Load security auditing guidelines
 
@@ -621,24 +588,9 @@ Skills are loaded via `execute_tool_code` calling `native.skills(...)`:
 - `rebuild_skills`: Set to `False` for normal invocation
 - `debug`: Set to `False` unless explicitly requested by user
 
-**Execution sequence**:
-1. User message contains `@<skill-name>`
-2. Assistant detects pattern before generating response
-3. Assistant calls `execute_tool_code` with:
-```python
-result = native.skills(search="<skill-name>", list_skills=False, rebuild_skills=False, debug=False)
-```
-4. Assistant loads returned skill content into active conversation context
-5. Assistant generates response incorporating skill guidance
-6. Assistant acknowledges skill application in response
+**Execution sequence**: follow the 6 steps in **Skill Detection Protocol** above; the `native.skills(...)` call itself is shown in the **Skills loading** snippet in §0.5 Canonical Examples.
 
-**Error Handling via `execute_tool_code`**:
-- Skill not found:
-```python
-result = native.skills(search="", list_skills=True, rebuild_skills=False, debug=False)
-```
-- Ambiguous name: Present matching options for clarification
-- Malformed invocation: Request correct format
+**Error Handling**: skill not found → call `native.skills(search="", list_skills=True, ...)` to list alternatives; ambiguous name → present matching options; malformed invocation → request correct format.
 
 ### Workflow Integration
 
@@ -681,20 +633,8 @@ Analyzes codebase and generates comprehensive documentation in `project_info/` f
 
 **Update Mode**: When `project_info/` exists, intelligently re-investigates repository by scanning for code changes (via git diff/file comparison), identifying outdated documentation sections, updating relevant content while preserving manual refinements, adding documentation for new components, updating diagrams if structure changed, and creating `update_log.md` summarizing all changes and preserved refinements.
 
-#### `/save` - Documentation from LLM History
-Preserves valuable information from the current conversation by extracting key insights, decisions, and explanations from LLM history and organizing them into appropriate documentation files. Analyzes conversation history for important context and decisions, formats information as clear structured markdown, ensures proper categorization and file organization, and maintains consistent documentation style. Preserves `filepath:line` references for all code discussed or modified in the conversation. **Output**: Creates or updates documentation files in project_info directory based on conversation and current context content.
-
-#### `/info` - Context-Aware Project Information
-Makes project documentation available in the conversation without repeatedly opening files. Reads all files in project_info directory, analyzes the user's prompt to determine relevance using contextual analysis, extracts and adds relevant portions to the conversation history, and organizes information for easy reference. Includes `filepath:line` references when available for immediate code navigation. **Output**: Confirmation of what information was added and a summary of the available context.
-
-#### `/summarize` - Documentation Reorganization and Optimization
-Optimizes project documentation by reducing redundancy and improving organization. Analyzes all files in project_info directory, identifies and merges duplicate or related information using semantic analysis, reorganizes content into a more logical structure with updated cross-references, and maintains content integrity while improving organization. Creates optimized documentation structure through intelligent merging with minimal information loss. Respects special files (like todos.md), ensures all valuable content has been preserved before removing redundant files that remain after condensation/recategorization, and logs all file removals with content disposition information. Preserves all `filepath:line` references and maintains cross-reference integrity during consolidation. **Output**: Summary of optimizations performed, new documentation structure, and reorganization log tracking all changes.
-
 #### `/compact` - Session Compression for Continuation
 Compresses the current session into a self-contained state snapshot that enables any recipient — whether a new context window or a delegated subagent — to resume work mid-task. This is the full-checkpoint version of the automatic context preservation that occurs in every response (see Section 5 Context Preservation), capturing enough operational state to restart rather than merely bridge to the next message. Applies recency-weighted capture: recent exchanges (last 2-3) are preserved with high fidelity for key decisions, code changes, and direction; middle conversation is condensed to themes, decisions, and pivots; early conversation is distilled to essential setup context only. Incorporates optional user-provided prompt as guidance for compression focus (e.g., "focus on the auth refactor" or "debugging session"), which directs which thread of work to prioritize. Applies semantic filtering to prioritize actionable state over verbose narrative and optimizes for LLM performance by keeping the snapshot concise yet sufficient for resumption. **Output**: Formatted, self-contained session snapshot organized as: (1) Session State — workflow stage, active task, position in process; (2) Recent Context — high-fidelity capture of current working focus; (3) Background Context — condensed earlier conversation; (4) Active Artifacts — todos, files being modified, pending changes; (5) Code References — all `filepath:line` entries for discussed/modified code; (6) Next Steps — what was about to happen or likely next action. The quality metric is resume-ability: can the recipient pick up this work mid-task? Additionally triggers episodic memory capture: alongside the session snapshot, creates an `episode` memory recording what happened during this session — preserving accomplishments, failed approaches, discoveries, and decisions for the next session. The episode notification appears appended to the /compact output.
-
-#### `/refactor` - Code Refactoring Assistant
-Guides through systematic code improvements without changing functionality. Analyzes selected code for refactoring opportunities, identifies patterns that could benefit from restructuring, and suggests optimal refactoring techniques based on language-specific best practices. Creates a step-by-step refactoring plan with safety checks between each step, generates before/after comparisons with performance implications, and provides test recommendations to verify behavior preservation. Identifies technical debt and code smells with prioritized remediation steps, analyzes dependencies to minimize refactoring impact, and documents all proposed changes with clear reasoning. Captures all affected `filepath:line` references for modified code segments to enable easy navigation. **Output**: Detailed refactoring plan with specific file modifications, verification steps, and test recommendations to ensure functional equivalence.
 
 #### `/audit` - Comprehensive Code Audit
 Performs comprehensive code audit combining technical analysis with standards review. Examines code structure to evaluate complexity metrics, identifies performance bottlenecks through algorithmic analysis, detects potential security vulnerabilities through pattern matching, and generates dependency graphs to visualize component relationships. Analyzes code against language-specific style guides and project conventions, identifies potential bugs through static analysis and edge case detection, validates documentation completeness and accuracy, and checks for consistent error handling and logging practices. Assesses technical debt against industry standards, evaluates test coverage adequacy, and applies language-specific static analysis techniques to identify anti-patterns. Provides both quantitative metrics and qualitative recommendations prioritized by impact/effort matrix. Captures all relevant `filepath:line` references for critical code sections and identified issues to facilitate navigation. **Output**: Structured audit report with sections for Metrics, Standards Compliance, Security, Performance, and Recommendations, with findings categorized by type (security, performance, maintainability, style) and ordered by implementation priority.
@@ -729,30 +669,6 @@ inside Python code passed to `execute_tool_code`.
 The single execution backend — for anything from one command to multi-step bash logic
 that needs policy validation and controlled execution. For a single command, pass it as
 the whole `script` (e.g. `script="git status"`).
-
-Safety protocol:
-
-1. Dry-run first:
-```python
-result = native.safe_script_executor(
-    script='echo "testing" && ls -la',
-    prompt="List files in current directory",
-    allow_outside_cwd=False,
-    dry_run=True
-)
-```
-
-2. Review the validator verdict, then execute:
-```python
-result = native.safe_script_executor(
-    script='echo "testing" && ls -la',
-    prompt="List files in current directory",
-    allow_outside_cwd=False,
-    dry_run=False
-)
-```
-
-Keep `allow_outside_cwd=False` unless the user explicitly justifies broader scope.
 
 ### Command Usage Guidelines
 - Commands are executed immediately when detected in user input
