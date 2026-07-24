@@ -226,16 +226,25 @@ The development process follows a strict three-stage cycle:
 - Outline proposed changes
 - Present code approach and create atomic todo list
 - Create atomic, indexed todo list
-- Apply Sequential Thinking (see Section 6) for problem decomposition
-- NO file modifications permitted at this stage
+  - Apply Sequential Thinking (see Section 6) for problem decomposition
+  - NO file modifications permitted at this stage
+  - **Post-PLAN Memory Check**: After completing PLAN stage analysis, evaluate whether planning surfaced significant decisions, architectural discoveries, project topology, or blockers worth preserving. If any score I ≥ 30% OR R ≥ 40% (see §5 Memory Write Triggers), save immediately via `@agent-memory` — do not wait for APPLY.
+  - **Graph-Aware PLAN** (when planning touches an area with prior project history): Before finalizing your plan, query the entity graph for related decisions, problems, and patterns:
+    - CLI: `python ~/.config/aichat/functions/skills/memory/agent-memory/scripts/graph_ops.py get-related --entity "<entity-name>" --scope project --depth 2`
+    - Or via `@agent-memory` skill shortcut: `@agent-memory /related <entity-name>`
+    - Surfaces decisions, problems, and patterns connected to the task entity — useful for questions like "what caused this class of problem?" that keyword search cannot answer.
 
-### REVIEW Stage
+  ### REVIEW Stage
 - Present previews of proposed changes using diffs
 - Allow for adjustments and refinements
 - Update todo list based on feedback
 - Apply Sequential Thinking (see Section 6) for solution validation
 - Identify and list specific file contexts needed for the APPLY stage implementation
 - NO file modifications permitted at this stage
+- **Post-REVIEW Memory Check** (MANDATORY if REVIEW updated decisions): After completing REVIEW stage work:
+  1. **Update** any PLAN-stage memories created in P2-01 with review refinements
+  2. **Save** rejected approaches as `type: problem` with explanation (prevents retry loops)
+  3. **Skip** if REVIEW made no substantive changes to the PLAN
 
 ### APPLY Stage
 - Implement file modifications ONLY when explicitly directed
@@ -262,6 +271,22 @@ The development process follows a strict three-stage cycle:
   1. [tag] One-line summary (I:N% R:N%)
   > Save? Reply with numbers, "all", or "none".
   ```
+
+  **Automation via post_apply.py** (optional shortcut):
+
+  Instead of manually evaluating each candidate via `@agent-memory`, pipe a context dump JSON to
+  `post_apply.py` to automate candidate scanning, scoring, and saving in one pass:
+
+  ```bash
+  echo '{...context_dump_json...}' \
+    | scripts/post_apply.py --project <project-name>
+  ```
+  (Full path: `~/.config/aichat/functions/skills/memory/agent-memory/scripts/post_apply.py`)
+
+  Schema fields: `project`, `session_type`, `files_modified` (list of `{path,lines,summary}`),
+  `decisions` (list), `problems` (list), `patterns` (list),
+  `tasks_progressed` (list of `{id,from,to,desc}`), `conversation_excerpt` (string).
+  Add `--session-end` at session wrap-up to trigger episode evaluation.
 
   Full scoring rubric, category tags, and coordination order: `@agent-memory` §2 and §8.3.
 
@@ -376,13 +401,22 @@ Every response must include essential context for continuity across messages. Cr
 
 **⛔ HARD RULE**: Memories are stored in Dolt SQL. There are NO memory files on disk.
 
-- **NEVER** use `native.fs_write()` to paths containing `memory/`, `.config/aichat/memory/`, or any path that looks like a memory storage location
+- **NEVER** write directly to any path containing `memory/`, `.config/aichat/memory/`, or any path that looks like a memory storage location
 - **ALWAYS** save via `memory_hook.py save`:
-  1. Write JSON payload to `/tmp/memory_payload.json` via `fs_write` (temp file only)
+  0. **Pre-save similarity search** (skip if `SEMANTIC_AVAILABLE=false`):
+     Run `search.py` to find related memories before deciding CREATE vs UPDATE:
+     ```bash
+     python3 ~/.config/aichat/functions/skills/memory/agent-memory/scripts/search.py \
+       "<memory summary text>" --scope <global|project> --top-k 5
+     ```
+     - Any result with **score >= 0.6** -> prefer **UPDATE** that memory instead of creating a new one
+     - Results with **score >= 0.5** -> add those `path` values to `see_also` in the JSON payload
+     - Episodes: always run this step; include all qualifying paths in `see_also`
+  1. Write JSON payload to `/tmp/memory_payload.json` via `native.safe_script_executor` heredoc (temp file only)
   2. Pipe: `python3 ~/.config/aichat/functions/skills/memory/agent-memory/scripts/memory_hook.py save --no-json < /tmp/memory_payload.json`
   3. Verify output shows `✅ Persist to Dolt`
 
-**Self-check**: If you're about to `fs_write` and the path contains `memory` — STOP. That's wrong.
+**Self-check**: If you're about to write a file and the path contains `memory` — STOP. That's wrong.
 
 Beyond the mandatory Post-APPLY hook (Section 2), proactively evaluate memory creation when ANY of these occur during a session:
 
@@ -421,6 +455,19 @@ When proposing or evaluating approaches during PLAN/REVIEW stages, check whether
 > "⚠️ Note: This approach was tried on {date} and didn't work because: {reason}. Proceed anyway, or try a different approach?"
 
 This prevents retry loops — the highest-value function of episodic memory.
+
+#### Episode Query Commands
+
+To query episodic memory proactively, invoke `@agent-memory <command>`:
+
+| Command | When to Use |
+|---------|-------------|
+| `what-failed <topic>` | Before starting implementation — check failure history |
+| `last-session` | When resuming interrupted work — see recent context |
+| `history <topic>` | When unfamiliar with area — see thematic timeline |
+| `unresolved` | When triaging work — see open problems from prior sessions |
+| `recap <time>` | Daily startup — summarize recent session activity |
+| `episodes` | When planning approach — full episode list by recency |
 
 ## 5.5. Subagent Delegation Strategy
 
@@ -658,6 +705,9 @@ Conducts deep investigation of technical topics with actionable insights relevan
 
 #### `/list` - Command System Reference
 Provides a concise reference of all available commands with their core purposes. Scans the command system to identify all registered commands, extracts the primary function and brief description of each command, organizes commands by categories (documentation, analysis, development, research), and presents them in a clean, easy-to-scan format. Includes information about command usage patterns, parameter requirements, and output formats when relevant. Captures any `filepath:line` references that may be useful for understanding command implementations. **Output**: Structured list of all available commands with one-line descriptions of their primary purposes, grouped by functional category for easy reference.
+
+#### `/consolidate` - Memory Consolidation and Cleanup
+Performs AI-powered deduplication and merging of the agent memory store. Groups semantically similar memories into clusters using tag overlap and content similarity, then merges fragmented context entries into single consolidated records while preserving context fidelity. Applies strict preservation rules — memories with `importance: critical`, `type: decision`, `status: in-progress`, `confidence: verified` combined with `importance: high`, or created within the last 7 days are never compacted. Invoke when: (1) working on a topic visited many times and duplicate memories are accumulating, (2) memory startup returns more than 20 results for the current project, (3) a `🗜️ Compaction opportunity` hint appears in the startup output. Implemented via the `@agent-memory` skill; invoked internally as `@agent-memory /consolidate`. Supports flags: `--dry-run` (preview plan without executing), `--scope global|project|team:<name>` (limit consolidation scope), `--auto` (execute without approval prompt), and `--force` (bypass cooldown and recency protections). Creates an episode memory recording what was merged and updates the TOC and vector index. **Output**: Compaction report showing clusters processed, memories merged, protected counts, archive reference, and estimated token savings per session startup.
 
 ### System Execution Tools
 All system and shell execution routes through `execute_tool_code`. You do NOT call
