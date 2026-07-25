@@ -230,7 +230,7 @@ The development process follows a strict three-stage cycle:
   - NO file modifications permitted at this stage
   - **Post-PLAN Memory Check**: After completing PLAN stage analysis, evaluate whether planning surfaced significant decisions, architectural discoveries, project topology, or blockers worth preserving. If any score I ≥ 30% OR R ≥ 40% (see §5 Memory Write Triggers), save immediately via `@agent-memory` — do not wait for APPLY.
   - **Graph-Aware PLAN** (when planning touches an area with prior project history): Before finalizing your plan, query the entity graph for related decisions, problems, and patterns:
-    - CLI: `python ~/.config/aichat/functions/skills/memory/agent-memory/scripts/graph_ops.py get-related --entity "<entity-name>" --scope project --depth 2`
+    - CLI: `~/.cache/agent-memory/venv/bin/python ~/.config/aichat/functions/skills/memory/agent-memory/scripts/graph_ops.py get-related --entity "<entity-name>" --scope project --depth 2`
     - Or via `@agent-memory` skill shortcut: `@agent-memory /related <entity-name>`
     - Surfaces decisions, problems, and patterns connected to the task entity — useful for questions like "what caused this class of problem?" that keyword search cannot answer.
 
@@ -406,15 +406,33 @@ Every response must include essential context for continuity across messages. Cr
   0. **Pre-save similarity search** (skip if `SEMANTIC_AVAILABLE=false`):
      Run `search.py` to find related memories before deciding CREATE vs UPDATE:
      ```bash
-     python3 ~/.config/aichat/functions/skills/memory/agent-memory/scripts/search.py \
+     ~/.cache/agent-memory/venv/bin/python ~/.config/aichat/functions/skills/memory/agent-memory/scripts/search.py \
        "<memory summary text>" --scope <global|project> --top-k 5
      ```
      - Any result with **score >= 0.6** -> prefer **UPDATE** that memory instead of creating a new one
      - Results with **score >= 0.5** -> add those `path` values to `see_also` in the JSON payload
      - Episodes: always run this step; include all qualifying paths in `see_also`
   1. Write JSON payload to `/tmp/memory_payload.json` via `native.safe_script_executor` heredoc (temp file only)
-  2. Pipe: `python3 ~/.config/aichat/functions/skills/memory/agent-memory/scripts/memory_hook.py save --no-json < /tmp/memory_payload.json`
+  2. Pipe: `~/.cache/agent-memory/venv/bin/python ~/.config/aichat/functions/skills/memory/agent-memory/scripts/memory_hook.py save --no-json < /tmp/memory_payload.json`
   3. Verify output shows `✅ Persist to Dolt`
+
+**⚠️ MANDATORY: `content_md` field**: Every memory payload MUST include a substantive `content_md` field (except `type: preference`). This is the **detailed markdown body** — NOT a repeat of `summary`.
+
+Include in `content_md`:
+- Relevant context, code snippets, file paths with line numbers
+- Reasoning behind decisions, trade-offs considered
+- Enough detail that the memory is useful when retrieved months later
+
+✅ Good `content_md`:
+```json
+"content_md": "## Decision: RRF Fusion\n\nChose Reciprocal Rank Fusion combining keyword + semantic.\n\n**Why**: Pure semantic misses exact identifiers; pure keyword misses conceptual matches.\n**Files**: `scripts/search.py:45-90`\n**Trade-offs**: Slightly slower (two queries) but significantly more accurate."
+```
+
+❌ Bad — these will trigger a validation warning:
+```json
+"content_md": ""
+"content_md": "Chose RRF fusion"
+```
 
 **Self-check**: If you're about to write a file and the path contains `memory` — STOP. That's wrong.
 
