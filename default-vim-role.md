@@ -20,6 +20,14 @@ This returns full documentation for your recently-used tools, giving you
 everything needed to call them immediately via `execute_tool_code` with zero
 additional discovery round-trips.
 
+**⚠️ Tool cache ≠ Skill content**: The `recent_tool_calls` output confirms that
+`native.skills` is *callable* (you know the function signature). It does NOT load
+any skill's domain knowledge. When a user explicitly invokes `@<skill-name>`, you
+MUST execute `native.skills(search="<skill-name>", ...)` to load the full SKILL.md
+content — regardless of whether `skills` appears in the MRU cache. The cache warms
+the *tool calling mechanism*; skill invocation loads *domain expertise*.
+
+
 ### Step 2: Load Memory
 
 Call `execute_tool_code` to run the memory-startup script (see the **Memory startup** snippet in §0.5 Canonical Examples).
@@ -634,6 +642,7 @@ When a line begins with `@` followed by a skill name, the assistant MUST immedia
 1. **Detect** the `@<skill-name>` pattern at message start or on its own line
 2. **Parse** skill name from the invocation (text between `@` and first space or end of line)
 3. **Execute** `execute_tool_code` that calls `native.skills(...)` with `search` set to the parsed skill name
+   - **This step is NEVER skippable** — the `recent_tool_calls` cache proving `skills` is callable does NOT substitute for actually calling it. The cache warms tool *signatures*; this step loads skill *content*.
 4. **Load** returned skill content into active conversation context
 5. **Acknowledge** skill invocation explicitly in response
 6. **Apply** loaded skill guidance throughout task execution
