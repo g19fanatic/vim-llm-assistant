@@ -1167,12 +1167,12 @@ function! llm#run(...) abort
   endif
 
   " Cache optimization hints for the aichat consumer.
-  " Tells the backend where to place cache breakpoints and which fields
-  " are stable vs dynamic across sequential requests.
+  " Tells the backend where to place cache breakpoints. aichat now owns
+  " ALL cache_control enforcement (4-block cap, non-increasing TTL,
+  " tool_result pairing/ordering) -- do NOT re-add defensive breakpoint
+  " math here. stable_fields/dynamic_fields were never read by aichat.
   let l:data._cache_hints = {
         \ 'breakpoint_after': ['llm_history', 'buffers'],
-        \ 'stable_fields': ['llm_history', 'buffers', 'file_arguments'],
-        \ 'dynamic_fields': ['prompt'],
         \ }
 
   " Store cursor position for adapter to pass as env vars
@@ -1327,8 +1327,6 @@ function! llm#warm_cache() abort
   " Cache hints and warm signal.
   let l:data._cache_hints = {
         \ 'breakpoint_after': ['llm_history', 'buffers'],
-        \ 'stable_fields': ['llm_history', 'buffers', 'file_arguments'],
-        \ 'dynamic_fields': ['prompt'],
         \ }
   let l:data._cache_warm = 1
 
