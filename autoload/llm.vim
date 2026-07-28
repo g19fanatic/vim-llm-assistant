@@ -55,6 +55,7 @@ function! llm#encode(obj) abort
           \ 'llm_history_turns',
           \ 'buffers',
           \ 'file_arguments',
+          \ 'cwd',
           \ 'active_buffer',
           \ 'prompt',
           \ '_cache_hints',
@@ -1157,6 +1158,10 @@ function! llm#run(...) abort
     let l:data.file_arguments = l:file_list
   endif
 
+  " Working directory — stable per session; enables log-analysis tooling to
+  " attribute a request to a project (nearest git root) after the fact.
+  let l:data.cwd = getcwd()
+
   if l:prompt != ''
     let l:data.prompt = l:prompt
   endif
@@ -1313,6 +1318,8 @@ function! llm#warm_cache() abort
         \ 'filename': l:active_filename,
         \ 'contents': l:active_contents,
         \ }
+
+  let l:data.cwd = getcwd()
 
   " Minimal prompt — signals intent without adding dynamic content.
   let l:data.prompt = 'cache warm'
