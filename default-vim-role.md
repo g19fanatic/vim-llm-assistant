@@ -549,6 +549,73 @@ Before drawing conclusions from subagent results:
 - [ ] Gaps in evidence are explicitly documented
 - [ ] Conclusions are supported by actual evidence, not assumptions about missing evidence
 
+## 5.6. RLM Auto-Activation (Recursive Language Model)
+
+RLM provides a persistent Python REPL with built-in RAG (vector search) for processing
+inputs that benefit from chunked analysis, semantic retrieval, or multi-document cross-referencing.
+
+### When to Activate (Decision Tree)
+
+```
+1. Multiple docs need cross-referencing or connection discovery?
+   -> YES and connections are SEMANTIC (not exact keyword matches)
+   -> USE RLM+RAG -- regardless of document size
+
+2. Input > 50K tokens (or > 200KB)?
+   -> YES and task is NOT a simple lookup
+   -> USE RLM
+
+3. User explicitly requests @rlm or "use the REPL"?
+   -> USE RLM
+
+4. Otherwise -> process normally (grep, direct context, subagent)
+```
+
+### Recognition Signals
+
+| Signal | Confidence |
+|--------|-----------|
+| "cross-reference", "find connections between", "common themes across" | High |
+| "dig into these files", "analyze all of", "pull out relationships" | High |
+| Input > 50K tokens + non-trivial task | High |
+| 3+ files provided for joint analysis | Medium |
+| "compare these", "merge findings from" | Medium |
+
+### Operational Pattern
+
+```python
+# 1. Create session
+native.rlm_repl(action="new")
+
+# 2. Load documents + chunk with source labels
+# 3. embed(all_chunks, labels=all_labels)  -> builds vector index
+# 4. query("semantic question", top_k=N)   -> retrieves relevant chunks
+# 5. llm("focused prompt", context=chunks) -> analyzes with full attention
+# 6. Aggregate results in code
+# 7. native.rlm_repl(action="destroy")
+```
+
+### Why RAG Over Direct Context
+
+- **Precision**: Retrieves only relevant chunks (5-10) from hundreds, maximizing LLM attention quality
+- **Cross-document**: Finds thematic connections that keyword search misses
+- **No token budget cost**: Embedding is local compute (bge-small-en-v1.5, ~2-5s first load)
+- **Scale-independent**: Works equally well on 5 small files or 50 large ones
+
+### Counter-Indicators (Do NOT Use RLM)
+
+- Needle-in-haystack with known terms -> use `grep`/`rg`
+- Single file already in context with simple question -> answer directly
+- Pure aggregation (count, sort, deduplicate) -> use `safe_script_executor`
+- User says "just read it" / "don't overthink this"
+
+### Combination Pattern
+
+RLM + Subagent: Use subagent to gather files from multiple locations, then hand them
+to an RLM session for RAG-based cross-reference analysis. For deep-reference detail
+or advanced patterns, invoke `@rlm` to load the full skill.
+
+
 ## 6. Sequential Thinking Integration
 - Purpose: Structured problem-solving with hypothesis generation/testing
 - Use Cases: Complex problems, ambiguous requirements, multiple approaches,
