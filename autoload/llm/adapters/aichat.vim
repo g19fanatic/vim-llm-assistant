@@ -5,6 +5,9 @@ let s:aichat_adapter = {}
 " Job tracking dictionary: {job_id: {job: handle, timer_id: id, prompt: str, model: str, start_time: timestamp}}
 let s:llm_jobs = {}
 let s:next_job_id = 1
+" Per-job retry counts: {job_id_str: retries_remaining}
+" Populated by s:retry_on_empty_response before re-launching process_async.
+let s:llm_retry_counts = {}
 
 " Helper for async status updates
 let s:timer_tick_count = {}
@@ -238,8 +241,14 @@ function! s:aichat_adapter.process_async(json_filename, prompt, model, callback)
         \ 'start_time': localtime(),
         \ 'temp_file': l:temp_file,
         \ 'log_file': (!empty(l:log_paths) ? l:log_paths.response : l:temp_file),
-        \ 'log_paths': l:log_paths
+        \ 'log_paths': l:log_paths,
+        \ 'json_filename': a:json_filename,
+        \ 'retry_count': get(s:llm_retry_counts, string(l:job_id), 2)
         \ }
+  " Consume the per-job retry count slot now that it has been read
+  if has_key(s:llm_retry_counts, string(l:job_id))
+    call remove(s:llm_retry_counts, string(l:job_id))
+  endif
   
   call llm#debug('aichat.process_async: Job tracked with ID=' . l:job_id)
   echo '[LLM] Job ' . l:job_id . ' started'
@@ -313,6 +322,22 @@ function! s:aichat_adapter.process(json_filename, prompt, model) abort
   return l:aichat_response
 endfunction
 
+" Helper: retry a job that returned an empty response.
+" Called by timer_start; a:retry_info is a dict passed by value via the
+" timer callback wrapper, so closure capture is not a concern.
+function! s:retry_on_empty_response(retry_info) abort
+  let l:info = a:retry_info
+  call llm#debug('s:retry_on_empty_response: Retrying (retries_left=' . l:info.retry_count . ', job_id=' . string(l:info.job_id) . ')')
+  echom '[LLM] Empty response — retrying (attempt ' . (3 - l:info.retry_count) . '/2)'
+
+  " Reserve the retry_count for the NEXT job ID that process_async will generate.
+  " s:next_job_id is the next ID that s:generate_job_id() will return.
+  " We store it keyed on that ID so process_async picks it up when it creates the job.
+  let s:llm_retry_counts[string(s:next_job_id)] = l:info.retry_count
+
+  call s:aichat_adapter.process_async(l:info.json_filename, l:info.prompt, l:info.model, l:info.callback)
+endfunction
+
 " Helper function to handle job completion
 function! s:on_job_complete(job_id, output, temp_file, timer_id, status, callback) abort
   call llm#debug('s:on_job_complete: ENTER (job_id=' . a:job_id . ', timer_id=' . a:timer_id . ', status=' . a:status . ', output_lines=' . len(a:output) . ')')
@@ -356,7 +381,42 @@ function! s:on_job_complete(job_id, output, temp_file, timer_id, status, callbac
   if a:status != 0
     let l:result = "ERROR (exit code " . a:status . "):\n" . l:result
   endif
-  
+
+  " --- Empty-response retry logic ---
+  " Strip multi-line HTML comment headers written at request start (<!-- ... -->),
+  " then check if the actual model response body is empty.  Only retry on clean exits.
+  if a:status == 0
+    let l:body = substitute(l:result, '<!--\_.\{-}-->', '', 'g')
+    let l:body = substitute(l:body, '^\s\+\|\s\+$', '', 'g')
+    if empty(l:body) && has_key(l:job_info, 'retry_count') && l:job_info.retry_count > 0
+      call llm#debug('s:on_job_complete: Empty response detected, retries_left=' . l:job_info.retry_count)
+      " Build retry_info dict; passed by value to timer callback via function(ref, [arg]) form.
+      " This avoids any lambda-over-local-var closure fragility.
+      let l:retry_info = {
+            \ 'job_id':        a:job_id,
+            \ 'json_filename':  get(l:job_info, 'json_filename', ''),
+            \ 'prompt':        get(l:job_info, 'prompt', ''),
+            \ 'model':         get(l:job_info, 'model', g:llm_default_model),
+            \ 'callback':      a:callback,
+            \ 'retry_count':   l:job_info.retry_count - 1
+            \ }
+      " Use timer_start with function(ref, arglist) to pass retry_info by value,
+      " avoiding any closure-capture fragility with local variables.
+      call timer_start(3000, function('s:retry_on_empty_response', [l:retry_info]))
+      " Session log: record the empty-response event
+      if g:llm_log_level !=# 'none' && !empty(l:job_info)
+        let l:duration = localtime() - get(l:job_info, 'start_time', localtime())
+        let l:entry = strftime('%Y-%m-%d %H:%M:%S') . ' | '
+              \ . get(l:job_info, 'model', '?') . ' | '
+              \ . l:duration . 's | EMPTY_RETRY | '
+              \ . get(l:job_info, 'prompt', '')[:80]
+        call llm#log#session_append(l:entry)
+      endif
+      return
+    endif
+  endif
+  " --- End retry logic ---
+
   call llm#debug('s:on_job_complete: Calling final callback')
   call a:callback(l:result)
 

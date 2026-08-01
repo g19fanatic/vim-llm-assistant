@@ -37,7 +37,7 @@ endif
 
 " Log level: 'none' (no logging), 'info' (response + session), 'debug' (+ input + aichat)
 if !exists('g:llm_log_level')
-  let g:llm_log_level = 'info'
+  let g:llm_log_level = 'debug'
 endif
 
 " Cleanup: max log directories to keep (0 = unlimited)
