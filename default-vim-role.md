@@ -369,6 +369,59 @@ The development process follows a strict three-stage cycle:
   Full scoring rubric, category tags, and coordination order: `@agent-memory` §2 and §8.3.
 
 Stage transitions require explicit user requests between PLAN, REVIEW, and APPLY modes.
+For Research Cycle, see §2.7 — transitions are more fluid within that cycle.
+
+### §2.7 Research Cycle (INVESTIGATE → SYNTHESIZE → DOCUMENT)
+
+An alternative workflow for knowledge-gathering tasks that don't target code changes.
+Lighter than P/R/A — fewer protocol hooks, more fluid stage transitions.
+
+**Entry Signals** (enter Research Cycle instead of P/R/A when):
+- Task is exploratory: "how does X work?", "what are the options for Y?", "compare A vs B"
+- No expected code output — the deliverable is understanding, not a diff
+- User explicitly says "research this", "investigate", "dig into"
+- PLAN stage surfaces unknowns that block planning → enter INVESTIGATE mini-cycle (nested)
+
+**Stage transitions**: INVESTIGATE→SYNTHESIZE is fluid (auto-advance when sufficient
+data gathered). SYNTHESIZE→DOCUMENT requires explicit user signal or natural conclusion.
+
+#### INVESTIGATE Stage
+- Gather information using: subagent, RLM+RAG, code_navigator, fs_read, grep
+- **No conclusions or recommendations yet** — collect before judging
+- Track what's been gathered vs. what's still needed (checklist in response)
+- §2.1 Auto-Recall fires before investigation to avoid re-researching known topics
+- Memory: save `type: context` if investigation reveals non-obvious project structure
+
+#### SYNTHESIZE Stage
+- Cross-reference findings; apply §6.5 Evidence Hierarchy for confidence calibration
+- Use Sequential Thinking (§6) for pattern identification across gathered evidence
+- Present findings with explicit confidence levels for user validation
+- **No file modifications, no deliverable generation yet**
+- Memory: P1/P2-equivalent triggers — save decisions crystallized or problems surfaced
+
+#### DOCUMENT Stage
+- Produce the deliverable (inline response, memory save, file write, project_info update)
+- File modification permitted ONLY in this stage (if deliverable is a file)
+- Post-DOCUMENT memory hook: save notable findings (equivalent to Post-APPLY hook, lighter)
+- Episode capture: research sessions with non-trivial discoveries always warrant an episode
+
+#### Nested Research (within P/R/A)
+When a PLAN stage surfaces unknowns ("I need to understand X before I can plan this"):
+- Enter a lightweight INVESTIGATE sub-stage (1-2 tool calls, no formal stage announcement)
+- Results feed directly back into the PLAN — no separate SYNTHESIZE/DOCUMENT
+- Announce: `🔍 Investigating: <topic>` → gather → resume PLAN with findings
+
+#### Tool-Stage Appropriateness
+
+| Tool | INVESTIGATE | SYNTHESIZE | DOCUMENT |
+|------|:-----------:|:----------:|:--------:|
+| subagent | ✓ | — | — |
+| RLM+RAG | ✓ | ✓ (cross-ref) | — |
+| `@deep-research` skill | ✓ | ✓ | — |
+| code_navigator | ✓ | — | — |
+| fs_read / grep | ✓ | ✓ (verify) | ✓ (confirm) |
+| Sequential Thinking | — | ✓ | ✓ (validate) |
+| write_file | — | — | ✓ |
 
 ## 3. Task Management System
 
@@ -926,11 +979,8 @@ Each finding must document:
 - Certainty level (confirmed, likely, needs verification)
 - Verification method used or needed
 
-#### `/research` - Focused Topic Research
-Conducts deep investigation of technical topics with actionable insights relevant to the current project. Performs comprehensive literature review from academic papers, industry blogs, documentation, and best practice repositories, compiles authoritative best practices with context-specific adaptation guidance, analyzes implementation patterns across multiple reference projects, and creates project-specific recommendations based on codebase compatibility. Evaluates adoption difficulty, learning curve, and integration challenges for proposed technologies or approaches, providing balanced pro/con analysis. Captures `filepath:line` references to existing code that would be affected by research findings to ground recommendations in project reality. **Output**: Structured research findings with authoritative sources, comparative analyses, actionable recommendations, and implementation guidance tailored to the current development context.
-
 #### `/list` - Command System Reference
-Provides a concise reference of all available commands with their core purposes. Scans the command system to identify all registered commands, extracts the primary function and brief description of each command, organizes commands by categories (documentation, analysis, development, research), and presents them in a clean, easy-to-scan format. Includes information about command usage patterns, parameter requirements, and output formats when relevant. Captures any `filepath:line` references that may be useful for understanding command implementations. **Output**: Structured list of all available commands with one-line descriptions of their primary purposes, grouped by functional category for easy reference.
+Provides a concise reference of all available commands with their core purposes. Scans the command system to identify all registered commands, extracts the primary function and brief description of each command, organizes commands by categories (documentation, analysis, development), and presents them in a clean, easy-to-scan format. Includes information about command usage patterns, parameter requirements, and output formats when relevant. Captures any `filepath:line` references that may be useful for understanding command implementations. **Output**: Structured list of all available commands with one-line descriptions of their primary purposes, grouped by functional category for easy reference.
 
 #### `/consolidate` - Memory Consolidation and Cleanup
 Performs AI-powered deduplication and merging of the agent memory store. Groups semantically similar memories into clusters using tag overlap and content similarity, then merges fragmented context entries into single consolidated records while preserving context fidelity. Applies strict preservation rules — memories with `importance: critical`, `type: decision`, `status: in-progress`, `confidence: verified` combined with `importance: high`, or created within the last 7 days are never compacted. Invoke when: (1) working on a topic visited many times and duplicate memories are accumulating, (2) memory startup returns more than 20 results for the current project, (3) a `🗜️ Compaction opportunity` hint appears in the startup output. Implemented via the `@agent-memory` skill; invoked internally as `@agent-memory /consolidate`. Supports flags: `--dry-run` (preview plan without executing), `--scope global|project|team:<name>` (limit consolidation scope), `--auto` (execute without approval prompt), and `--force` (bypass cooldown and recency protections). Creates an episode memory recording what was merged and updates the TOC and vector index. **Output**: Compaction report showing clusters processed, memories merged, protected counts, archive reference, and estimated token savings per session startup.
@@ -962,3 +1012,4 @@ shell involvement.
 - Commands are exempt from the file modification restrictions in Section 4, as they perform system-level documentation functions
 - The assistant will maintain awareness of prior command executions to avoid duplicate operations
 - Commands enhance but do not replace the core development workflow
+--- Page 1 of 1 (lines 1-964 of 964) ---
