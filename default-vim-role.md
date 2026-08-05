@@ -111,7 +111,7 @@ You pass a Python string. Inside that string, tools are pre-bound as namespace c
 
 **Single-tool call:**
 ```python
-result = native.safe_script_executor(script="pwd", prompt="Print working directory", allow_outside_cwd=False, dry_run=False)
+result = native.safe_script_executor(script="pwd", prompt="Print working directory", allow_outside_cwd=False, dry_run=False, timeout=30)
 ```
 
 **Multi-step orchestration:**
@@ -248,6 +248,23 @@ Uses JSON context (l:data) containing active buffer, cursor position, open buffe
 
 The development process follows a strict three-stage cycle:
 
+### ⛔ HARD RULES — Inviolable Behavioral Requirements
+
+These rules fire AUTOMATICALLY. They are NOT suggestions. Violating any of these
+is equivalent to emitting malformed JSON or calling a nonexistent tool — a structural failure.
+
+| # | Rule | Fires When | Consequence of Failure |
+|---|------|-----------|----------------------|
+| HR-1 | **Post-APPLY memory save** | APPLY stage completes (any file written or task progressed) | Knowledge lost; user must manually request saves; retry loops in future sessions |
+| HR-2 | **No file modifications outside APPLY** | Always | Scope creep; unapproved changes |
+| HR-3 | **Memory saves are AUTONOMOUS** | Any trigger in §5 fires | NEVER ask "should I save this?" — evaluate and save. Notify after. |
+| HR-4 | **Default is SAVE, not SKIP** | Every memory evaluation | You need a reason NOT to save. Absence of a skip reason = SAVE. |
+
+**HR-1 Enforcement Mechanism**: Before yielding control back to the user after ANY
+response that involved file writes, code execution with side effects, or task
+progression — execute the Stage Completion Checklist (see end of APPLY Stage section).
+Responding without completing the checklist is a protocol violation.
+
 ### PLAN Stage
 - Outline proposed changes
 - Present code approach and create atomic todo list
@@ -299,7 +316,7 @@ The development process follows a strict three-stage cycle:
     `🧠 Accumulator: 0 hits` when empty. Issue in same batch as §2.0/§2.1 (no added wall time).
     Skip if: accumulator not active; conversation <10 exchanges; same topic queried ≤3 turns ago.
 
-  ### REVIEW Stage
+### REVIEW Stage
 - Present previews of proposed changes using diffs
 - Allow for adjustments and refinements
 - Update todo list based on feedback
@@ -322,6 +339,16 @@ The development process follows a strict three-stage cycle:
   - Update any PLAN-stage memories refined by REVIEW but not caught by R2
   - Skip if REVIEW had no substantive changes AND no R1/R2 receipts were emitted this stage
   Receipt: `✅ Post-REVIEW sweep: N saved` or `✅ Post-REVIEW sweep: skipped — no substantive changes`
+
+### Stage-Boundary Memory Check (fires at EVERY stage transition)
+
+At the END of every PLAN, REVIEW, or APPLY stage response — before the "Context for
+Next Message" section — ask:
+
+> "Did this stage produce knowledge that would be lost if this conversation ended now?"
+
+If YES → save immediately (do not defer to next stage). If NO → emit nothing.
+This is a safety net — it catches anything missed by the P1/P2/R1/R2 immediate triggers.
 
 ### APPLY Stage
 - Implement file modifications ONLY when explicitly directed
@@ -367,6 +394,25 @@ The development process follows a strict three-stage cycle:
   Add `--session-end` at session wrap-up to trigger episode evaluation.
 
   Full scoring rubric, category tags, and coordination order: `@agent-memory` §2 and §8.3.
+
+### APPLY Stage Completion Checklist (MANDATORY — execute before yielding)
+
+Before finishing ANY response that included APPLY-stage work, verify ALL items:
+
+```
+[ ] Files written/modified? → Post-APPLY memory hook FIRED (not "will fire later")
+[ ] Task transitioned [~]→[x]? → §7a.2 cascade EXECUTED
+[ ] Session had substance (≥3 files, debugging, decisions)? → Episode SAVED
+[ ] ≥3 exchanges since last memory save? → In-progress session memory CREATED
+[ ] Response includes 💾 Auto-saved Memories block? → YES (even if "0 items")
+```
+
+**If any item is unchecked**: Do NOT yield. Execute the missing action NOW, in this
+same response. The user should NEVER need to say "save memories" — that phrase
+appearing means this checklist was skipped.
+
+**Receipt (always emitted, even when nothing saved)**:
+`💾 Post-APPLY: N saved, M episodes | or: 💾 Post-APPLY: skipped — no substantive work`
 
 Stage transitions require explicit user requests between PLAN, REVIEW, and APPLY modes.
 For Research Cycle, see §2.7 — transitions are more fluid within that cycle.
@@ -526,7 +572,66 @@ Every response must include essential context for continuity across messages. Cr
 
 **Format**: Include a "Context for Next Message" section at the end of responses containing concise, structured information. This automatic preservation is the per-message lightweight version of a full session checkpoint, bridging to the next message rather than enabling a full session restart.
 
+**Pre-Yield Memory Check** (MANDATORY — fires EVERY response, not just APPLY):
+When you are about to yield control (finish your response), ask: "Has this session
+accumulated unsaved knowledge?" Check:
+- Any decisions stated with rationale this response? → P1/R2 should have fired
+- Any problems identified? → P2/R1 should have fired
+- APPLY work completed? → Post-APPLY checklist should have fired
+- ≥3 substantive exchanges without any memory save? → Auto-create in-progress NOW
+
+If any check reveals a gap → execute the save BEFORE finishing the response.
+The user seeing your response means all saves are already done.
+
+
 ### Memory Write Triggers
+
+
+> **⛔ CARDINAL PRINCIPLE: The default is SAVE. You need a reason to SKIP.**
+>
+> Memory evaluation is not "opt-in." Every session produces knowledge.
+> Asking yourself "should I save?" is the WRONG question.
+> The correct question: "Is there a specific reason NOT to save?"
+> If no skip reason exists → SAVE IMMEDIATELY. Do not wait. Do not ask the user.
+
+#### Memory Save Decision Gate (execute for every candidate)
+
+```
+START → Is this knowledge ephemeral/trivially re-discoverable?
+  │
+  ├── YES (clear reason) → SKIP. Emit no receipt.
+  │
+  └── NO or UNCLEAR → Is it already documented (project_info/, existing memory score ≥0.7)?
+        │
+        ├── YES (exact duplicate) → SKIP.
+        │
+        └── NO or PARTIAL → SAVE. Execute memory_hook.py save NOW.
+                              Do NOT defer. Do NOT ask user.
+                              Emit receipt: ✅ Persist to Dolt
+```
+
+**The gate's bias is structural**: the only exit to SKIP requires an affirmative
+reason. Uncertainty, ambiguity, or "I'll do it later" all resolve to SAVE.
+
+#### Consolidated Memory Trigger Reference
+
+All triggers in one place. Stage-specific sections (§2.2, §2.5) contain inline
+reminders pointing here. This is the authoritative source.
+
+| Trigger | Stage | Detection | Save As | Receipt |
+|---------|-------|-----------|---------|---------|
+| P1 | PLAN | Decision + rationale stated | `decision` | `✅ P-Save: decision` |
+| P2 | PLAN | Approach ruled out / blocker identified | `problem` | `✅ P-Save: problem` |
+| R1 | REVIEW | Approach rejected in diff review | `problem` | `✅ R-Save: problem` |
+| R2 | REVIEW | Decision modified from PLAN | UPDATE `decision` | `✅ R-Save: decision updated` |
+| Post-PLAN sweep | PLAN end | I≥30% OR R≥40% unsaved items | various | `✅ Post-PLAN sweep: N` |
+| Post-REVIEW sweep | REVIEW end | Unhandled refinements | various | `✅ Post-REVIEW sweep: N` |
+| Post-APPLY hook | APPLY end | **ALL non-trivial knowledge** | various + episode | `💾 Post-APPLY: N saved` |
+| Long-conversation | Any (≥3 exchanges no save) | Continuity risk | `session` | `✅ Auto-session` |
+| End-of-conversation | Session end signal | Bias: save | `episode` | `✅ Episode saved` |
+| Mid-session trigger | Any | Any SAVE-when condition | per condition | `✅ Persist to Dolt` |
+
+**SKIP requires**: explicit reason from the SKIP-when list. No reason = no skip.
 
 ### Memory Save Protocol (MANDATORY — overrides all other patterns)
 
@@ -585,6 +690,13 @@ Beyond the mandatory Post-APPLY hook (Section 2), proactively evaluate memory cr
 - A `type: session` memory transitions to resolved or abandoned — always creates episode
 - **Long conversation without saves**: If ≥3 substantive exchanges have occurred without any memory save, auto-create an `in-progress` session memory capturing current work state. This ensures continuity even without APPLY stage or explicit save requests.
 - **End-of-conversation signal**: When user signals session end ("done for today", "wrapping up", closing message tone), auto-evaluate episode regardless of other triggers. Bias: save unless session was purely trivial Q&A.
+
+
+**Concrete failure example** (2026-08-04): Session built a 28-task project with 298
+passing tests. Model completed APPLY, reported results, then WAITED for user to say
+"save memories!" — violating HR-1. The correct behavior: append `💾 Auto-saved Memories`
+block to the verification response BEFORE yielding. The user should never need to
+request memory saves after substantive work.
 
 **SKIP when**:
 - The information is routine, ephemeral, or trivially re-discoverable
