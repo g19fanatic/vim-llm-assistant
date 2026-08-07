@@ -1183,6 +1183,9 @@ function! llm#run(...) abort
   
   call llm#debug('llm#run: JSON data size=' . len(l:json_data) . ' bytes, files=' . len(l:file_list))
   
+  " Capture tmux window name at kick-off time so notify func can use it later
+  let l:tmux_window = !empty($TMUX) ? substitute(system('tmux display-message -p "#W"'), '\n\+$', '', '') : ''
+
   " Create log request dir if logging enabled
   let l:log_paths = (g:llm_log_level !=# 'none') ? llm#log#create_request() : {}
 
@@ -1193,6 +1196,17 @@ function! llm#run(...) abort
           \ 'start_time': strftime('%H:%M:%S')}
     call add(s:active_requests, l:request_entry)
     let s:last_request_dir = l:log_paths.dir
+    " Write .status file for dashboard consumption
+    let l:status_data = json_encode({
+          \ 'state': 'running',
+          \ 'model': l:model,
+          \ 'prompt': strpart(l:prompt, 0, 80),
+          \ 'started_at': strftime('%Y-%m-%d %H:%M:%S'),
+          \ 'tmux_window': l:tmux_window,
+          \ })
+    call writefile([l:status_data], l:log_paths.dir . '/.status')
+    " Log STARTED marker to session.log
+    call llm#log#session_append(strftime('%Y-%m-%d %H:%M:%S') . ' | ' . l:model . ' | STARTED | ' . l:log_paths.dir . ' | ' . strpart(l:prompt, 0, 80))
   endif
 
   " Write the JSON data to a file (persist at debug level, temp otherwise)
@@ -1245,6 +1259,20 @@ function! llm#run(...) abort
 
     " Deregister this request from active list
     call filter(s:active_requests, 'v:val.dir !=# l:log_paths.dir')
+
+    " Update .status file with completion info for dashboard
+    if !empty(l:log_paths) && isdirectory(l:log_paths.dir)
+      let l:done_status = json_encode({
+            \ 'state': 'done',
+            \ 'model': l:model,
+            \ 'prompt': strpart(l:prompt, 0, 80),
+            \ 'completed_at': strftime('%Y-%m-%d %H:%M:%S'),
+            \ 'response_file': l:log_paths.response,
+            \ 'tmux_window': l:tmux_window,
+            \ })
+      call writefile([l:done_status], l:log_paths.dir . '/.status')
+    endif
+
     
     call llm#debug('OnLLMComplete: EXIT (buffer operations complete)')
     echom '[LLM] Complete!'
@@ -1255,8 +1283,6 @@ function! llm#run(...) abort
   " Show initial status and start async processing
   echom '[LLM] Request sent, processing...'
   call llm#debug('llm#run: Calling process_async with model="' . l:model . '"')
-  " Capture tmux window name at kick-off time so notify func can use it later
-  let l:tmux_window = !empty($TMUX) ? substitute(system('tmux display-message -p "#W"'), '\n\+$', '', '') : ''
   call llm#process_async(l:tempfile, l:prompt, l:model, function('OnLLMComplete'))
 endfunction
 

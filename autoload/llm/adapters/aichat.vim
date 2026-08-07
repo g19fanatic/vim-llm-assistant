@@ -423,10 +423,12 @@ function! s:on_job_complete(job_id, output, temp_file, timer_id, status, callbac
   " Append to session.log (AFTER callback so we don't delay response display)
   if g:llm_log_level !=# 'none' && !empty(l:job_info)
     let l:duration = localtime() - get(l:job_info, 'start_time', localtime())
+    let l:log_dir = has_key(l:job_info, 'log_paths') ? get(l:job_info.log_paths, 'dir', '') : ''
     let l:entry = strftime('%Y-%m-%d %H:%M:%S') . ' | '
           \ . get(l:job_info, 'model', '?') . ' | '
           \ . l:duration . 's | '
           \ . (a:status == 0 ? 'OK' : 'ERROR:' . a:status) . ' | '
+          \ . l:log_dir . ' | '
           \ . get(l:job_info, 'prompt', '')[:80]
     call llm#log#session_append(l:entry)
   endif
