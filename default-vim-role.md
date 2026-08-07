@@ -276,8 +276,8 @@ Responding without completing the checklist is a protocol violation.
     1. **TOC Check (free)**: Scan the `=== TOC ===` / `=== IN-PROGRESS ===` / `=== CORE MEMORIES ===` already in context from §0 startup. Note any entries whose summaries overlap with the current task topic, file, entity, or error.
     2. **Decide — Fire or Skip** (precedence: unanimous-skip > any-fire > default-skip):
        - **Skip (unanimous — ALL must hold)**: (a) single-line clarification with no new topic; (b) user said "just apply" / "skip planning" / "just run it"; (c) exact same topic recalled ≤3 turns ago this session.
-       - **Fire (ANY one holds)**: (a) task references file/entity NOT in the TOC scan; (b) user uses retrospective phrasing ("why did we...", "what did we decide...", "what failed..."); (c) error/traceback resembling a stored `type: problem`; (d) ≥2 PLAN exchanges since last recall check this session.
-       - **Default (neither unanimous-skip NOR any fire condition)**: Skip — bias toward not triggering on ambiguous/low-signal turns.
+       - **Fire (ANY one holds)**: (a) task references file/entity NOT in the TOC scan; (b) user uses retrospective phrasing ("why did we...", "what did we decide...", "what failed..."); (c) error/traceback resembling a stored `type: problem`; (d) ≥2 PLAN exchanges since last recall check this session; (e) this is the FIRST PLAN turn of the session AND the project has >5 stored memories (from §0 startup count).
+       - **Default (neither unanimous-skip NOR any fire condition)**: Fire — bias toward surfacing prior context. The cost of a wasted search (~2s) is far less than a retry loop from missed prior knowledge.
     3. **Tier 2 Search (when fired)** — real tool call, not freeform prose:
        `safe_script_executor(script="~/.cache/agent-memory/venv/bin/python ~/.config/aichat/functions/skills/memory/agent-memory/scripts/search.py \"<topic>\" --scope project --top-k 5", allow_outside_cwd=True, timeout=15)`
        Parse the JSON array output. **If also running a code_navigator query, issue BOTH calls in the same tool-call batch** (saves ~3.5s via parallelism).
@@ -646,7 +646,7 @@ reminders pointing here. This is the authoritative source.
        "<memory summary text>" --scope <global|project> --top-k 5
      ```
      - Any result with **score >= 0.6** -> prefer **UPDATE** that memory instead of creating a new one
-     - Results with **score >= 0.5** -> add those `path` values to `see_also` in the JSON payload
+     - Results with **score >= 0.4** -> add those `path` values to `see_also` in the JSON payload
      - Episodes: always run this step; include all qualifying paths in `see_also`
   1. Write JSON payload to `/tmp/memory_payload.json` via `native.safe_script_executor` heredoc (temp file only)
   2. Pipe: `~/.cache/agent-memory/venv/bin/python ~/.config/aichat/functions/skills/memory/agent-memory/scripts/memory_hook.py save --no-json < /tmp/memory_payload.json`
@@ -688,7 +688,11 @@ Beyond the mandatory Post-APPLY hook (Section 2), proactively evaluate memory cr
 - A session produced experiential knowledge (≥1 meaningful file change, decision, problem-solving, or ≥1 failed approach) — trigger episode evaluation
 - Work is being paused/interrupted and the session had ANY substance — trigger episode (bias toward saving; even brief sessions with a decision or insight warrant capture)
 - A `type: session` memory transitions to resolved or abandoned — always creates episode
-- **Long conversation without saves**: If ≥3 substantive exchanges have occurred without any memory save, auto-create an `in-progress` session memory capturing current work state. This ensures continuity even without APPLY stage or explicit save requests.
+- **Mid-conversation checkpoint** (two triggers, whichever fires FIRST):
+  - **Exchange-count trigger**: At the 5th substantive exchange of any session (regardless of whether other saves have fired), auto-create an `in-progress` session memory capturing: current task, files involved, approach being taken, decisions made so far. This protects against context_length_exceeded fatals that lose accumulated state.
+  - **Save-gap trigger**: If ≥3 substantive exchanges have occurred without ANY memory save (including this checkpoint), fire immediately. This is the existing rule, retained as a safety net.
+  - Both triggers produce: `✅ Auto-checkpoint: in-progress '<task summary>'`
+  - Update (don't duplicate) if a prior checkpoint exists for this session.
 - **End-of-conversation signal**: When user signals session end ("done for today", "wrapping up", closing message tone), auto-evaluate episode regardless of other triggers. Bias: save unless session was purely trivial Q&A.
 
 
@@ -728,6 +732,13 @@ Memory Saves protocols.
 **Execution (mid-session triggers)**: When a trigger fires mid-session, invoke `@agent-memory` and run its full Save workflow (Should I Save? → Where to Save? → Write) **autonomously**. Do NOT ask the user "should I save this?" — evaluate using the skill's decision tree and save if warranted. Always inform the user what was saved and where.
 
 **Execution (episode triggers)**: For episode-type triggers, evaluate whether the session warrants an episodic record. **Default bias: save the episode** unless the session was purely trivial (simple Q&A, formatting, minor edits with no decisions). Use `@agent-memory` §2 episode scoring only for genuinely borderline cases. Episodes capture EXPERIENCES (what happened, what failed, what was discovered) — distinct from semantic memories which capture CONCLUSIONS.
+
+**Episode quality gate** (MANDATORY for automated episode creation):
+- Reject episodes whose `content_md` is purely mechanical metadata (session ID, turn count, skill list) with no experiential knowledge
+- Minimum quality bar: episode MUST contain at least ONE of: (a) a decision with rationale, (b) a problem encountered and its resolution/workaround, (c) a discovery or insight, (d) a failed approach with explanation
+- Episodes failing the quality bar → downgrade to `type: session` with `importance: low` or SKIP entirely
+- When using automated tools (`memorize.py`, `post_apply.py`), prefer LLM-synthesized summaries over mechanical metadata extraction
+
 
 **Execution (post-apply)**: The post-apply step uses a **hybrid** flow — see Section 2 "Post-APPLY Memory Suggestions". Candidates scoring I ≥ 30% OR R ≥ 40% are auto-saved immediately (user is notified but not asked for approval). Only marginal candidates (below both thresholds) are presented in the interactive numbered list for user selection.
 
